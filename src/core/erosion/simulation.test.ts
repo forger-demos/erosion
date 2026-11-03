@@ -22,3 +22,14 @@ test('a snapshot is detached from the live state', () => {
   expect(before.height).toEqual(copy);
   expect(sim.snapshot().height).not.toEqual(copy);
 });
+
+test('the rendered relief visibly changes as the simulation runs', async () => {
+  const {renderRelief} = await import('../relief/relief');
+  const sim = createSimulation({n: 64, seed: 1});
+  const before = renderRelief(sim.snapshot().height, 64, {contours: false});
+  sim.advance(600);
+  const after = renderRelief(sim.snapshot().height, 64, {contours: false});
+  let differing = 0;
+  for (let i = 0; i < before.length; i += 4) if (before[i] !== after[i] || before[i + 1] !== after[i + 1] || before[i + 2] !== after[i + 2]) differing++;
+  expect(differing / (before.length / 4)).toBeGreaterThan(0.5);
+});
