@@ -1,9 +1,11 @@
 import {presetIds, presets, type PresetId} from '../core/terrain/presets';
-import {drawHeightmap, parseSeed} from './heightmap';
+import {parseSeed} from './heightmap';
+import {drawRelief} from './relief';
 
 const seedInput = document.getElementById('seed') as HTMLInputElement;
 const picker = document.getElementById('preset') as HTMLSelectElement;
 const main = document.getElementById('main') as HTMLCanvasElement;
+const contoursBox = document.getElementById('contours') as HTMLInputElement;
 const status = document.getElementById('status') as HTMLElement;
 const strip = document.getElementById('strip') as HTMLElement;
 
@@ -29,13 +31,14 @@ function render(): void {
   const seed = parseSeed(seedInput.value, 1);
   seedInput.value = String(seed);
   const ok =
-    drawHeightmap(main, seed, picker.value as PresetId) &&
-    presetIds.every((id) => drawHeightmap(thumbs.get(id)!, seed, id));
-  status.textContent = ok ? '' : 'This browser cannot draw the heightmap: the 2D canvas is unavailable.';
+    drawRelief(main, seed, picker.value as PresetId, contoursBox.checked) &&
+    presetIds.every((id) => drawRelief(thumbs.get(id)!, seed, id, contoursBox.checked));
+  status.textContent = ok ? '' : 'This browser cannot draw the relief: the 2D canvas is unavailable.';
   main.hidden = !ok;
   strip.hidden = !ok;
 }
 
 seedInput.addEventListener('change', render);
 picker.addEventListener('change', render);
+contoursBox.addEventListener('change', render);
 render();

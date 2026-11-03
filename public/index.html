@@ -24,9 +24,10 @@ figure{margin:0}figcaption{color:var(--muted);font-size:.875rem}
 <form onsubmit="return false">
 <label>Seed<input id="seed" type="text" inputmode="numeric" value="1"></label>
 <label>Preset<select id="preset"></select></label>
+<label><span><input id="contours" type="checkbox" checked> Contour lines</span></label>
 </form>
 <p id="status" role="status">Generating terrain...</p>
-<canvas id="main" width="256" height="256" role="img" aria-label="Greyscale heightmap of the selected preset"></canvas>
+<canvas id="main" width="256" height="256" role="img" aria-label="Shaded relief map of the selected preset, coloured by height and slope"></canvas>
 <div id="strip"></div>
 </main>
 <script type="module" src="main.js"></script>
