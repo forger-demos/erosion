@@ -5,6 +5,7 @@ import {gridSize, parseSeed} from './heightmap';
 import {attachOrbitControls} from './orbitControls';
 import {createSurface, type Surface} from './surface';
 import {drawRelief, drawReliefHeights} from './relief';
+import {waterOverlay, type WaterOverlay} from '../core/water/overlay';
 import {createSimClient, type SimClient} from './simClient';
 
 const seedInput = document.getElementById('seed') as HTMLInputElement;
@@ -55,6 +56,7 @@ function ensureSurface(): Surface | null {
 
 let client: SimClient | null = null;
 let latest: Float32Array | null = null;
+let overlay: WaterOverlay | null = null;
 let playing = false;
 let starting = false;
 let failure: string | null = null;
@@ -68,12 +70,14 @@ function syncControls(): void {
   else if (status.textContent === 'Starting the simulation...') status.textContent = '';
 }
 
-function showFrame(steps: number, height: Float32Array): void {
+function showFrame(steps: number, height: Float32Array, water: Float32Array): void {
   latest = height;
+  overlay = waterOverlay(height, water, gridSize);
   stepsOut.textContent = `Step ${steps}`;
-  drawReliefHeights(main, height, contoursBox.checked);
+  drawReliefHeights(main, height, contoursBox.checked, overlay);
   if (surface && !surfaceCanvas.hidden) {
-    surface.setHeights(height);
+    surface.setHeights(overlay.surface);
+    surface.setWater(overlay.wetness, overlay.alpha);
     requestAnimationFrame(redraw);
   }
 }
@@ -105,7 +109,7 @@ function startClient(): void {
       mine.send({type: 'play'});
       playing = true;
     } else if (m.type === 'frame') {
-      showFrame(m.steps, m.height);
+      showFrame(m.steps, m.height, m.water);
     } else if (m.type === 'error') {
       failure = `The simulation stopped: ${m.message}`;
       stopClient();
@@ -133,6 +137,7 @@ function render(reset = true): void {
   if (reset && (client || latest)) {
     stopClient();
     latest = null;
+    overlay = null;
     failure = null;
     stepsOut.textContent = 'Step 0';
     syncControls();
@@ -141,7 +146,7 @@ function render(reset = true): void {
   seedInput.value = String(seed);
   const preset = picker.value as PresetId;
   const ok =
-    (latest ? drawReliefHeights(main, latest, contoursBox.checked) : drawRelief(main, seed, preset, contoursBox.checked)) &&
+    (latest ? drawReliefHeights(main, latest, contoursBox.checked, overlay ?? undefined) : drawRelief(main, seed, preset, contoursBox.checked)) &&
     presetIds.every((id) => drawRelief(thumbs.get(id)!, seed, id, contoursBox.checked));
   let message = ok ? '' : 'This browser cannot draw the relief: the 2D canvas is unavailable.';
   let show3d = false;
@@ -149,7 +154,9 @@ function render(reset = true): void {
     status.textContent = 'Starting the 3D view...';
     const s = ensureSurface();
     if (s) {
-      s.setHeights(latest ?? generateTerrain(gridSize, seed, preset));
+      s.setHeights(overlay?.surface ?? latest ?? generateTerrain(gridSize, seed, preset));
+      if (overlay) s.setWater(overlay.wetness, overlay.alpha);
+      else s.setWater(new Float32Array(gridSize * gridSize), new Float32Array(gridSize * gridSize));
       show3d = true;
     } else {
       message = `${surfaceFailed} The 2D relief is shown instead.`;

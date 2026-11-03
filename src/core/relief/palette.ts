@@ -8,6 +8,8 @@ export interface Palette {
   snow: Rgb;
   /** Tint that wet ground moves towards. */
   wet: Rgb;
+  /** Colour of open water, laid over the ground by the water overlay's opacity. */
+  water: Rgb;
   /** Height fractions between which sand gives way to grass. */
   sandFrom: number;
   sandTo: number;
@@ -37,6 +39,7 @@ export const reliefPalette: Palette = {
   rock: [0.47, 0.44, 0.41],
   snow: [0.95, 0.97, 1],
   wet: [0.14, 0.3, 0.45],
+  water: [0.16, 0.38, 0.6],
   sandFrom: 0.36,
   sandTo: 0.5,
   snowFrom: 0.74,

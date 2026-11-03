@@ -39,6 +39,7 @@ describe('shader sources', () => {
     expect(f.startsWith('#version 300 es')).toBe(true);
     expect(f).toContain('vec3 groundColour(');
     expect(f).toContain('clamp(x, 0, 63)');
+    expect(f).toContain('texelFetch(uWater');
   });
 });
 
@@ -68,6 +69,9 @@ describe('createSurface with a context', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     r.surface.setHeights(new Float32Array(16));
+    const before = calls.filter((c) => c === 'texSubImage2D').length;
+    r.surface.setWater(new Float32Array(16).fill(1), new Float32Array(16).fill(0.5));
+    expect(calls.filter((c) => c === 'texSubImage2D').length).toBe(before + 1);
     r.surface.draw({yaw: 0, pitch: 0.5, distance: 100});
     expect(calls).toContain('texSubImage2D');
     expect(calls).toContain('drawElements');
