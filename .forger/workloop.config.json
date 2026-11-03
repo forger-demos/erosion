@@ -1,0 +1,49 @@
+{
+  "repo": null,
+  "worker_command": "forger:auto-ticket",
+  "gates": "bun install --frozen-lockfile && bun run check && bun \"$HOME/work/forger/plugins/forger/bin/work.ts\" check",
+  "base_branch": "main",
+  "model_by_priority": {
+    "P0": {
+      "model": "opus",
+      "budget": 22.5
+    },
+    "default": {
+      "model": "sonnet",
+      "budget": 18
+    }
+  },
+  "effort_multiplier": {
+    "small": 1,
+    "medium": 1.5,
+    "large": 2.5
+  },
+  "limits": {
+    "timeoutMinutes": 45,
+    "killGraceSeconds": 30,
+    "maxConsecutiveFailures": 3,
+    "pauseBetweenIterations": 5000,
+    "pauseAfterFailure": 10000,
+    "maxStallIterations": 5
+  },
+  "paths": {
+    "backlog": ".forger/backlog.json",
+    "state": ".forger/state.json",
+    "log": ".forger/work.log",
+    "output": ".forger/output",
+    "halt": ".forger/HALT",
+    "lock": ".forger/runner.lock",
+    "events": ".forger/events.jsonl",
+    "declined": ".forger/declined.json",
+    "verdicts": ".forger/verdicts"
+  },
+  "skills": {},
+  "tracker": {
+    "kind": "github",
+    "label": "ready-for-agent",
+    "ignore": [
+      "wayfinder:*"
+    ]
+  },
+  "harness": "claude"
+}

@@ -1,0 +1,25 @@
+{
+  "product": {
+    "name": "<project name> - <what this backlog covers>",
+    "description": "<one or two sentences on the goal of this backlog>",
+    "note": "The backlog when tracker.kind is local or none; with github the issues are the backlog. Prefer additive, opt-in changes over breaking the public API."
+  },
+  "features": {
+    "example_ticket": {
+      "priority": "P0",
+      "status": "not_started",
+      "type": "feature",
+      "depends_on": [],
+      "effort": "medium",
+      "issue": null,
+      "description": "Replace this with a real ticket. Say what and why, enough to implement in one iteration without guessing.",
+      "acceptance_criteria": [
+        "A testable outcome",
+        "Another testable outcome",
+        "Documented where it belongs"
+      ],
+      "files": ["src/"],
+      "reuse": ["name the pattern or reference to follow"]
+    }
+  }
+}

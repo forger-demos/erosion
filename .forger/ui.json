@@ -1,0 +1,34 @@
+{
+  "paths": [
+    "public/**",
+    "src/**/*.css",
+    "src/**/*.svelte",
+    "src/**/*.tsx",
+    "src/**/*.vue"
+  ],
+  "tokens": [
+    "public/tokens.css"
+  ],
+  "start": "bun run start",
+  "url": "http://localhost:3102",
+  "routes": [
+    "/"
+  ],
+  "viewports": [
+    {
+      "name": "phone",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "name": "desktop",
+      "width": 1280,
+      "height": 800
+    }
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "ready_timeout": 60
+}

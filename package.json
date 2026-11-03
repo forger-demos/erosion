@@ -1,0 +1,16 @@
+{
+  "name": "erosion",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "PORT=${PORT:-3102} bun src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --coverage --coverage-reporter=lcov --coverage-reporter=text",
+    "check": "bun run typecheck && bun run test"
+  },
+  "devDependencies": {
+    "@types/bun": "1.1.14",
+    "playwright": "1.48.2",
+    "typescript": "5.6.3"
+  }
+}

@@ -1,0 +1,14 @@
+:root {
+  --bg: #0b0d12;
+  --fg: #e8ebf2;
+  --muted: #8b93a7;
+  --accent: #7cc4ff;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f7f8fb;
+    --fg: #141821;
+    --muted: #5a6275;
+    --accent: #0a62b8;
+  }
+}

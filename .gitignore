@@ -1,0 +1,10 @@
+node_modules/
+coverage/
+.forger/state.json
+.forger/work.log
+.forger/output/
+.forger/HALT
+.forger/runner.lock
+.forger/events.jsonl
+.forger/declined.json
+.forger/verdicts/
