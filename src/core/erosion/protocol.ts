@@ -11,6 +11,8 @@ export type Request =
   | {type: 'pause'}
   /** Pauses and jumps to a step, replaying from a checkpoint when it is behind the run. */
   | {type: 'seek'; step: number}
+  /** Runs the CPU reference to a step, apart from the live run, and answers with its fields. */
+  | {type: 'export'; step: number}
   /** The page has drawn the last frame; the next one may be sent. */
   | {type: 'ack'};
 
@@ -19,6 +21,8 @@ export type Response =
   | {type: 'ready'; n: number; path: SimPath; label: string}
   /** `reached` is the furthest step the run has been to, which bounds what can be scrubbed to. */
   | ({type: 'frame'; reached: number} & Snapshot)
+  /** The reference state at `steps` on the CPU grid of edge `n`; the live run is untouched. */
+  | {type: 'exported'; steps: number; n: number; height: Float32Array; water: Float32Array}
   | {type: 'error'; message: string};
 
 export interface RunnerEnv {
@@ -42,6 +46,8 @@ export function createRunner(env: RunnerEnv, stepsPerBatch = 4, gpuStepsPerBatch
   let looping = false;
   let awaitingAck = false;
   let batch = stepsPerBatch;
+  /** What the run was started with, so an export can rebuild the CPU reference for it. */
+  let reference: SimulationOptions | null = null;
 
   function postFrame(): void {
     if (!sim) return;
@@ -74,6 +80,7 @@ export function createRunner(env: RunnerEnv, stepsPerBatch = 4, gpuStepsPerBatch
           let path: SimPath = 'cpu';
           let notice: string | undefined;
           sim = null;
+          reference = {n: message.n, seed: message.seed, preset: message.preset, params};
           if (message.gpuN) {
             const options = {n: message.gpuN, seed: message.seed, preset: message.preset, params};
             const attempt = env.gpu ? env.gpu(options) : {reason: 'the GPU path is not available here'};
@@ -108,6 +115,15 @@ export function createRunner(env: RunnerEnv, stepsPerBatch = 4, gpuStepsPerBatch
           sim.seek(message.step);
           postFrame();
           break;
+        case 'export': {
+          if (!reference) throw new Error('The simulation has not been initialised.');
+          if (!Number.isInteger(message.step) || message.step < 0) throw new Error('A step must be a whole number of zero or more.');
+          const run = create(reference);
+          run.advance(message.step);
+          const done = run.snapshot();
+          env.post({type: 'exported', steps: done.steps, n: reference.n, height: done.height, water: done.water}, [done.height.buffer, done.water.buffer] as ArrayBuffer[]);
+          break;
+        }
         case 'ack':
           awaitingAck = false;
           break;

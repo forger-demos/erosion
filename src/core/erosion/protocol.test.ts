@@ -177,4 +177,27 @@ describe('simulation worker protocol', () => {
       expect((out.at(-1) as Extract<Response, {type: 'frame'}>).steps).toBe(7);
     });
   });
+
+  test('export answers with the CPU reference at the asked step and leaves the live run alone', () => {
+    const h = harness();
+    h.send(init);
+    h.send({type: 'export', step: 5});
+    const done = h.out.find((m) => m.type === 'exported') as Extract<Response, {type: 'exported'}>;
+    const ref = createSimulation({n: 16, seed: 3, preset: 'hills', params: paramsFor({rain: 0.012, hardness: 0.2})});
+    ref.advance(5);
+    expect(done.steps).toBe(5);
+    expect(done.n).toBe(16);
+    expect(done.height).toEqual(ref.snapshot().height);
+    expect(done.water).toEqual(ref.snapshot().water);
+    expect(h.frames().at(-1)!.steps).toBe(0);
+  });
+
+  test('export before init, or at a bad step, reports an error', () => {
+    const h = harness();
+    h.send({type: 'export', step: 1});
+    expect(h.out.at(-1)!.type).toBe('error');
+    h.send(init);
+    h.send({type: 'export', step: -1});
+    expect(h.out.at(-1)!.type).toBe('error');
+  });
 });

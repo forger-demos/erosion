@@ -9,6 +9,8 @@ import {waterOverlay, type WaterOverlay} from '../core/water/overlay';
 import {clampSettings, hardnessRange, rainRange, scenarios} from '../core/erosion/settings';
 import {createSimClient, type SimClient} from './simClient';
 import {gpuGridSize} from '../core/erosion/path';
+import {exportFilename, heightmapPng, shadedPng, type ExportKind} from '../core/export/images';
+import {download} from './download';
 
 const seedInput = document.getElementById('seed') as HTMLInputElement;
 const picker = document.getElementById('preset') as HTMLSelectElement;
@@ -26,6 +28,10 @@ const hardnessInput = document.getElementById('hardness') as HTMLInputElement;
 const rainOut = document.getElementById('rain-out') as HTMLOutputElement;
 const hardnessOut = document.getElementById('hardness-out') as HTMLOutputElement;
 const timeInput = document.getElementById('time') as HTMLInputElement;
+const exportButtons: Record<ExportKind, HTMLButtonElement> = {
+  heightmap: document.getElementById('export-height') as HTMLButtonElement,
+  shaded: document.getElementById('export-shaded') as HTMLButtonElement,
+};
 const strip = document.getElementById('strip') as HTMLElement;
 
 for (const id of presetIds) {
@@ -92,6 +98,7 @@ function syncControls(): void {
   playButton.textContent = playing ? 'Pause' : 'Play';
   playButton.disabled = starting;
   retryButton.hidden = failure === null;
+  syncExport();
   if (failure !== null) status.textContent = failure;
   else if (starting) status.textContent = 'Starting the simulation (compiling shaders)...';
   else if (replaying) status.textContent = `Replaying to step ${timeInput.value}...`;
@@ -99,6 +106,14 @@ function syncControls(): void {
 }
 
 let replaying = false;
+/** What the current run was started with and the file the viewer asked for, until the worker's reference answers. */
+let runInfo: {seed: number; preset: PresetId} | null = null;
+let pendingExport: ExportKind | null = null;
+
+function syncExport(): void {
+  const ready = latest !== null && runInfo !== null && pendingExport === null && !replaying;
+  for (const button of Object.values(exportButtons)) button.disabled = !ready;
+}
 
 function showFrame(steps: number, reached: number, height: Float32Array, water: Float32Array): void {
   timeInput.max = String(reached);
@@ -109,6 +124,7 @@ function showFrame(steps: number, reached: number, height: Float32Array, water: 
   latest = height;
   overlay = waterOverlay(height, water, size);
   stepsOut.textContent = `Step ${steps}`;
+  syncExport();
   drawReliefHeights(main, height, contoursBox.checked, overlay);
   const shown = surfaceCanvas.hidden ? null : ensureSurface();
   if (shown) {
@@ -132,6 +148,7 @@ function resize(n: number): void {
 
 function stopClient(): void {
   client?.dispose();
+  pendingExport = null;
   client = null;
   playing = false;
   starting = false;
@@ -160,7 +177,10 @@ function startClient(): void {
       playing = true;
     } else if (m.type === 'frame') {
       showFrame(m.steps, m.reached, m.height, m.water);
+    } else if (m.type === 'exported') {
+      finishExport(m.steps, m.n, m.height, m.water);
     } else if (m.type === 'error') {
+      pendingExport = null;
       failure = `The simulation stopped: ${m.message}`;
       replaying = false;
       stopClient();
@@ -168,6 +188,7 @@ function startClient(): void {
     syncControls();
   });
   client = mine;
+  runInfo = {seed: parseSeed(seedInput.value, 1), preset: picker.value as PresetId};
   const {rain, hardness} = clampSettings({rain: Number(rainInput.value), hardness: Number(hardnessInput.value)});
   mine.send({type: 'init', n: gridSize, gpuN: gpuGridSize, seed: parseSeed(seedInput.value, 1), preset: picker.value as PresetId, rain, hardness});
   syncControls();
@@ -180,6 +201,30 @@ playButton.addEventListener('click', () => {
   syncControls();
 });
 retryButton.addEventListener('click', startClient);
+
+function finishExport(steps: number, n: number, height: Float32Array, water: Float32Array): void {
+  const kind = pendingExport;
+  pendingExport = null;
+  if (!kind || !runInfo) return;
+  try {
+    const bytes = kind === 'heightmap' ? heightmapPng(height, n) : shadedPng(height, water, n, contoursBox.checked);
+    download(exportFilename(kind, runInfo.preset, runInfo.seed, steps), bytes);
+    status.textContent = `Saved the ${kind === 'heightmap' ? 'heightmap' : 'shaded image'} for step ${steps} from the CPU reference, ${n} x ${n} cells.`;
+  } catch (e) {
+    status.textContent = `The export failed: ${e instanceof Error ? e.message : String(e)}`;
+  }
+  syncExport();
+}
+
+for (const [kind, button] of Object.entries(exportButtons) as [ExportKind, HTMLButtonElement][]) {
+  button.addEventListener('click', () => {
+    if (!client || pendingExport) return;
+    pendingExport = kind;
+    status.textContent = 'Running the CPU reference for the export...';
+    syncExport();
+    client.send({type: 'export', step: Number(timeInput.value)});
+  });
+}
 
 timeInput.addEventListener('input', () => {
   if (!client) return;
@@ -204,9 +249,11 @@ function render(reset = true): void {
     timeInput.value = '0';
     timeInput.disabled = true;
     replaying = false;
+    runInfo = null;
     pathOut.textContent = '';
     resize(gridSize);
     syncControls();
+    syncExport();
   }
   const seed = parseSeed(seedInput.value, 1);
   seedInput.value = String(seed);
