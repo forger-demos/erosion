@@ -15,3 +15,10 @@ test('refuses paths outside public', async () => {
   const res = await handle(new Request('http://x/../package.json'));
   expect(res.status).toBe(404);
 });
+
+test('serves the bundled page script', async () => {
+  const res = await handle(new Request('http://x/main.js'));
+  expect(res.status).toBe(200);
+  expect(res.headers.get('content-type')).toContain('javascript');
+  expect(await res.text()).toContain('getElementById');
+});
