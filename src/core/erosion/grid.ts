@@ -1,4 +1,5 @@
-import {mulberry32} from './prng';
+import {generateTerrain} from '../terrain/noise';
+import type {PresetId} from '../terrain/presets';
 
 export interface Params {
   /** Seconds per step. */
@@ -60,12 +61,12 @@ export interface Grid {
   evaporated: number;
 }
 
-/** A ridge-and-valley bed from seeded value noise, using only +, -, * so every engine agrees. */
-export function createGrid(n: number, seed: number): Grid {
+/** An empty-water grid whose bed is the seeded terrain for a preset. */
+export function createGrid(n: number, seed: number, preset: PresetId = 'hills'): Grid {
   const size = n * n;
-  const grid: Grid = {
+  return {
     n,
-    b: new Float32Array(size),
+    b: generateTerrain(n, seed, preset),
     d: new Float32Array(size),
     s: new Float32Array(size),
     fl: new Float32Array(size),
@@ -80,34 +81,6 @@ export function createGrid(n: number, seed: number): Grid {
     rained: 0,
     evaporated: 0,
   };
-  const rand = mulberry32(seed);
-  let amp = n / 4;
-  let step = n >> 1;
-  while (step >= 1) {
-    const lattice = Math.floor(n / step) + 2;
-    const values = new Float32Array(lattice * lattice);
-    for (let i = 0; i < values.length; i++) values[i] = rand();
-    for (let y = 0; y < n; y++) {
-      for (let x = 0; x < n; x++) {
-        const gx = Math.floor(x / step);
-        const gy = Math.floor(y / step);
-        const fx = x / step - gx;
-        const fy = y / step - gy;
-        const sx = fx * fx * (3 - 2 * fx);
-        const sy = fy * fy * (3 - 2 * fy);
-        const v00 = values[gy * lattice + gx]!;
-        const v10 = values[gy * lattice + gx + 1]!;
-        const v01 = values[(gy + 1) * lattice + gx]!;
-        const v11 = values[(gy + 1) * lattice + gx + 1]!;
-        const top = v00 + (v10 - v00) * sx;
-        const bottom = v01 + (v11 - v01) * sx;
-        grid.b[y * n + x]! += amp * (top + (bottom - top) * sy);
-      }
-    }
-    amp *= 0.5;
-    step >>= 1;
-  }
-  return grid;
 }
 
 /** FNV-1a over the bit patterns of the state arrays; equal hashes mean bit-for-bit equal runs. */
