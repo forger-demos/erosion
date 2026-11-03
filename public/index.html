@@ -31,6 +31,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}.time{display:flex;gap:.7
 <label>Preset<select id="preset"></select></label>
 <label>View<select id="view"><option value="2d">2D relief</option><option value="3d">3D surface</option></select></label>
 <div class="run"><button id="play" type="button">Play</button><button id="retry" type="button" hidden>Retry</button><output id="steps" aria-live="off">Step 0</output></div>
+<div class="run"><button id="export-height" type="button" disabled>Download heightmap</button><button id="export-shaded" type="button" disabled>Download shaded image</button></div>
 <label>Rain <output id="rain-out"></output><input id="rain" type="range"></label>
 <label>Rock hardness <output id="hardness-out"></output><input id="hardness" type="range"></label>
 <label><span><input id="contours" type="checkbox" checked> Contour lines</span></label>
