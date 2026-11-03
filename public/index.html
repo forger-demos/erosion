@@ -37,6 +37,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}.time{display:flex;gap:.7
 </form>
 <div class="time"><label for="time">Time</label><input id="time" type="range" min="0" max="0" step="1" value="0" disabled aria-describedby="steps"></div>
 <p id="status" role="status">Generating terrain...</p>
+<p id="path" role="status"></p>
 <canvas id="main" width="256" height="256" role="img" aria-label="Shaded relief map of the selected preset, coloured by height and slope"></canvas>
 <canvas id="surface" hidden tabindex="0" role="img" aria-label="Lit 3D terrain surface. Drag or use the arrow keys to orbit, scroll or use plus and minus to zoom."></canvas>
 <div id="strip"></div>

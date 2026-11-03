@@ -76,7 +76,8 @@ export function step(grid: Grid, p: Params): void {
     }
   }
 
-  // 5. erosion and deposition; water depth is untouched, mass moves between b and s
+  // 5. erosion and deposition; water depth is untouched, mass moves between b and s.
+  // The new bed goes to scratch so every slope reads the bed as the stage began, in any visiting order.
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
       const i = y * n + x;
@@ -89,15 +90,16 @@ export function step(grid: Grid, p: Params): void {
       const capacity = p.kc * Math.max(sinAlpha, 0.01) * speed * depthFactor;
       if (capacity > s[i]!) {
         const amount = p.dt * p.ks * (capacity - s[i]!);
-        b[i] = b[i]! - amount;
+        db[i] = b[i]! - amount;
         s[i] = s[i]! + amount;
       } else {
         const amount = p.dt * p.kd * (s[i]! - capacity);
-        b[i] = b[i]! + amount;
+        db[i] = b[i]! + amount;
         s[i] = s[i]! - amount;
       }
     }
   }
+  b.set(db);
 
   // 6. sediment travels with the water leaving each cell
   const moved = db;

@@ -1,6 +1,6 @@
 import {describe, expect, test} from 'bun:test';
 import {createRunner, type Request, type Response} from './protocol';
-import {createSimulation} from './simulation';
+import {createSimulation, type Simulation} from './simulation';
 import {paramsFor} from './settings';
 import type {Timeline} from './timeline';
 
@@ -20,7 +20,7 @@ describe('simulation worker protocol', () => {
   test('init answers ready and sends step 0', () => {
     const h = harness();
     h.send(init);
-    expect(h.out[0]).toEqual({type: 'ready', n: 16});
+    expect(h.out[0]).toEqual({type: 'ready', n: 16, path: 'cpu', label: 'Running on the CPU worker, 16 x 16 cells.'});
     expect(h.frames()[0]!.steps).toBe(0);
     expect(h.frames()[0]!.height.length).toBe(256);
   });
@@ -136,5 +136,45 @@ describe('simulation worker protocol', () => {
     h.send(init);
     h.send({type: 'seek', step: -1});
     expect(h.out.at(-1)!.type).toBe('error');
+  });
+
+  describe('path choice', () => {
+    const fake = (n: number): Simulation => ({...createSimulation({n, seed: 3}), n});
+
+    test('a working GPU path runs at the GPU size and says so', () => {
+      const out: Response[] = [];
+      const send = createRunner({post: (m) => out.push(m), schedule: () => {}, gpu: (o) => ({simulation: fake(o.n)})});
+      send({...init, gpuN: 24});
+      expect(out[0]).toEqual({type: 'ready', n: 24, path: 'gpu', label: 'Running on the GPU (WebGL2), 24 x 24 cells.'});
+      expect((out[1] as Extract<Response, {type: 'frame'}>).height.length).toBe(576);
+    });
+
+    test('a GPU path that cannot start falls back to the CPU size with the reason', () => {
+      const out: Response[] = [];
+      const send = createRunner({post: (m) => out.push(m), schedule: () => {}, gpu: () => ({reason: 'EXT_color_buffer_float is not supported'})});
+      send({...init, gpuN: 24});
+      const ready = out[0] as Extract<Response, {type: 'ready'}>;
+      expect(ready.path).toBe('cpu');
+      expect(ready.n).toBe(16);
+      expect(ready.label).toContain('EXT_color_buffer_float is not supported');
+      expect(ready.label).toContain('CPU worker');
+    });
+
+    test('with no GPU hook the CPU runs and the label says why', () => {
+      const out: Response[] = [];
+      createRunner({post: (m) => out.push(m), schedule: () => {}})({...init, gpuN: 24});
+      expect((out[0] as Extract<Response, {type: 'ready'}>).path).toBe('cpu');
+    });
+
+    test('the GPU path steps in larger batches than the CPU path', () => {
+      const out: Response[] = [];
+      const queue: (() => void)[] = [];
+      const send = createRunner({post: (m) => out.push(m), schedule: (f) => queue.push(f), gpu: (o) => ({simulation: fake(o.n)})}, 2, 7);
+      send({...init, gpuN: 16});
+      send({type: 'ack'});
+      send({type: 'play'});
+      queue.shift()!();
+      expect((out.at(-1) as Extract<Response, {type: 'frame'}>).steps).toBe(7);
+    });
   });
 });

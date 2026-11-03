@@ -13,10 +13,11 @@ export function drawRelief(canvas: HTMLCanvasElement, seed: number, preset: Pres
 export function drawReliefHeights(canvas: HTMLCanvasElement, heights: Float32Array, contours: boolean, water?: WaterOverlay): boolean {
   const ctx = canvas.getContext('2d');
   if (!ctx) return false;
-  canvas.width = gridSize;
-  canvas.height = gridSize;
-  const rgba = renderRelief(heights, gridSize, {contours, water});
-  const image = ctx.createImageData(gridSize, gridSize);
+  const n = Math.round(Math.sqrt(heights.length));
+  canvas.width = n;
+  canvas.height = n;
+  const rgba = renderRelief(heights, n, {contours, water});
+  const image = ctx.createImageData(n, n);
   image.data.set(rgba);
   ctx.putImageData(image, 0, 0);
   return true;
