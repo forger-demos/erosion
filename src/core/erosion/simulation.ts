@@ -1,4 +1,4 @@
-import {createGrid, defaultParams, type Grid, type Params} from './grid';
+import {createGrid, defaultParams, maxStableDt, type Grid, type Params} from './grid';
 import {step} from './step';
 import type {PresetId} from '../terrain/presets';
 
@@ -26,6 +26,7 @@ export interface SimulationOptions {
 
 /** The CPU reference behind the interface a worker, a benchmark or a GPU path can share. */
 export function createSimulation({n, seed, preset, params = defaultParams}: SimulationOptions): Simulation {
+  if (params.dt > maxStableDt(params)) throw new Error('The time step is above the stability limit of the model.');
   const grid: Grid = createGrid(n, seed, preset);
   let steps = 0;
   return {

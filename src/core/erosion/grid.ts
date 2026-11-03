@@ -38,6 +38,14 @@ export const defaultParams: Params = {
   thermalRate: 0.1,
 };
 
+/**
+ * Longest time step the pipe model integrates stably: the flux and depth updates form a
+ * wave equation whose fastest (checkerboard) mode needs dt^2 * 8 * g * pipeArea / cell^3 <= 4.
+ */
+export function maxStableDt(p: Pick<Params, 'g' | 'pipeArea' | 'cell'>): number {
+  return Math.sqrt((p.cell * p.cell * p.cell) / (2 * p.pipeArea * p.g));
+}
+
 export interface Grid {
   n: number;
   /** Bed height, water depth, suspended sediment (as bed-height equivalent). */

@@ -11,7 +11,7 @@ test('the interface matches stepping the grid directly', () => {
   for (let i = 0; i < 400; i++) step(grid, defaultParams);
   expect(sim.steps).toBe(400);
   expect(sim.snapshot().height).toEqual(grid.b);
-  expect(hashGrid(grid)).toBe('8f1c13f9');
+  expect(hashGrid(grid)).toBe('0b6ff107');
 });
 
 test('a snapshot is detached from the live state', () => {

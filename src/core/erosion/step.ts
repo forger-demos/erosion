@@ -140,20 +140,28 @@ export function step(grid: Grid, p: Params): void {
     grid.evaporated += before - d[i]!;
   }
 
-  // 8. thermal weathering: material slumps from over-steep cells to lower neighbours
+  // 8. thermal weathering: material slumps from over-steep cells to lower neighbours.
+  // Eight neighbours, the diagonals at sqrt(2) the distance, so slumping has no preferred
+  // axis; four neighbours alone leave terraces along the grid lines.
   db.fill(0);
   const reach = p.talus * p.cell;
+  const diagReach = reach * Math.sqrt(2);
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
       const i = y * n + x;
-      for (let dir = 0; dir < 4; dir++) {
-        const to = dir === 0 ? (x > 0 ? i - 1 : -1) : dir === 1 ? (x < n - 1 ? i + 1 : -1) : dir === 2 ? (y > 0 ? i - n : -1) : y < n - 1 ? i + n : -1;
-        if (to < 0) continue;
-        const excess = b[i]! - b[to]! - reach;
-        if (excess <= 0) continue;
-        const amount = (p.thermalRate * excess) / 2;
-        db[i] = db[i]! - amount;
-        db[to] = db[to]! + amount;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= n) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= n || (dx === 0 && dy === 0)) continue;
+          const to = yy * n + xx;
+          const excess = b[i]! - b[to]! - (dx !== 0 && dy !== 0 ? diagReach : reach);
+          if (excess <= 0) continue;
+          const amount = (p.thermalRate * excess) / 2;
+          db[i] = db[i]! - amount;
+          db[to] = db[to]! + amount;
+        }
       }
     }
   }

@@ -8,8 +8,8 @@ The brief wants rain carving channels, sediment filling valleys, slopes slumping
 
 ## Decision
 
-Simulate on a uniform grid with the virtual-pipe shallow-water model (Mei, Decaudin, Hu) plus a thermal weathering pass. Move sediment by donor-cell transfer on the water fluxes rather than semi-Lagrangian lookup. Use closed boundaries. The pure implementation lives in `src/core/erosion/`.
+Simulate on a uniform grid with the virtual-pipe shallow-water model (Mei, Decaudin, Hu) plus a thermal weathering pass. Move sediment by donor-cell transfer on the water fluxes rather than semi-Lagrangian lookup. Thermal weathering looks at all eight neighbours, the diagonals at their true distance, because four alone leave terraces along the grid lines. Use closed boundaries. The pure implementation lives in `src/core/erosion/`.
 
 ## Consequences
 
-Every step is a local stencil, so the same maths ports to fragment shaders. Water, sediment and bed height each have an exact balance to test. Channels need many steps to form, so presets and a GPU path matter. Stream power may be added later as a terrain pre-pass without changing this model. Open boundaries and layered rock are out of scope.
+Every step is a local stencil, so the same maths ports to fragment shaders. Water, sediment and bed height each have an exact balance to test. Channels need many steps to form, so presets and a GPU path matter. Stream power may be added later as a terrain pre-pass without changing this model. The time step is bounded by `maxStableDt`, and tests assert that the carved landscape forms a channel network without a grid-aligned bias. Open boundaries and layered rock are out of scope.

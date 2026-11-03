@@ -18,8 +18,8 @@ describe('virtual-pipe erosion on a small grid', () => {
     expect(hashGrid(run(32, 7, 50))).not.toBe(hashGrid(run(32, 8, 50)));
   });
 
-  test('the hash of a fixed run is pinned, so engine or maths drift is caught', () => {
-    expect(hashGrid(run(32, 7, 400))).toBe('8f1c13f9');
+  test('the hash of a fixed run is pinned, so engine or maths drift is caught (moved when thermal weathering gained its diagonal neighbours)', () => {
+    expect(hashGrid(run(32, 7, 400))).toBe('0b6ff107');
   });
 
   test('water is conserved: rain in, evaporation out, nothing else', () => {
