@@ -1,4 +1,4 @@
-# Development process - <project name>
+# Development process - erosion
 
 One ticket per iteration, quality gates green, small clean commits.
 **On GitHub, the issues are the backlog**: an open issue with the intake label is
@@ -11,12 +11,12 @@ commands are generic; everything specific to THIS project lives here and in
 
 ## What this repo is
 
-<One paragraph: what the project is, where it sits in the stack, who consumes it.>
+A single-page browser demo that grows a mountain range: seeded terrain, a hydraulic and thermal erosion simulation the viewer can play, pause and scrub, and relief, 3D and water views, with PNG export. Bun and TypeScript; `src/app.ts` serves `public/`. Pure logic lives in `src/core/`, browser code in `src/shell/`. The consumer is a person at a browser; there is no backend and no paid service. The plan is `docs/plan.md`, the reasoning is in `docs/research/` and `docs/adr/`.
 
 ## The gates
 
 The exact command is in `.forger/workloop.config.json` (`gates`). Never proceed
-on red. Describe here anything a gate does not catch that a reviewer should.
+on red. The gate does not catch visual quality or cross-browser behaviour, and does not prove the GPU path matches the CPU reference beyond what its tolerance test covers. A reviewer checks the screenshots in both themes and the browser notes in the PR.
 
 ## The tracker
 
@@ -53,8 +53,12 @@ as enforced, not advisory.
   lands as a tested command with machine-readable output, not as prompt text.
   Pure logic is split from I/O, and side effects sit behind an injectable `CommandRunner`.
 - **Comments say why, never narrate a change.** History belongs in the commit.
-- <e.g. "Never delete data; removal means active = 0.">
-- <e.g. "Phase 1 is read-only; no writes outside a write-scoped ticket.">
+- **The CPU path is the bit-exact reference.** Simulation and generation code in `src/core/` uses float32 arrays and only `+ - * / sqrt`; no `Math.sin`, `Math.pow`, `Math.exp`, `Math.random` or `Date` there. Randomness comes from the integer-only seeded generator.
+- **Update from a snapshot.** A cell's new value never depends on the order cells are visited, so CPU and GPU agree and runs repeat.
+- **Conservation is asserted, not hoped for.** Water balances against rain minus evaporation and bed plus suspended sediment is constant on closed boundaries; no NaN, no negative water or sediment. A change to the maths that moves the pinned hash updates the pin on purpose, with the reason in the PR.
+- **Maths apart from rendering.** `src/core/` imports nothing from the DOM, WebGL or workers; shaders that mirror a `core` function are tested against it.
+- **Simulation never runs on the main thread** in the shipped page.
+- **No network in tests and no keys.** The page works offline from `public/`.
 
 The retro refines this file over time: a lesson that holds for this project
 lands here by PR, and one that holds for every project goes upstream to forger.
