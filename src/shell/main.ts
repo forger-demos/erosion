@@ -8,6 +8,7 @@ import {drawRelief, drawReliefHeights} from './relief';
 import {waterOverlay, type WaterOverlay} from '../core/water/overlay';
 import {clampSettings, hardnessRange, rainRange, scenarios} from '../core/erosion/settings';
 import {createSimClient, type SimClient} from './simClient';
+import {gpuGridSize} from '../core/erosion/path';
 
 const seedInput = document.getElementById('seed') as HTMLInputElement;
 const picker = document.getElementById('preset') as HTMLSelectElement;
@@ -15,7 +16,8 @@ const main = document.getElementById('main') as HTMLCanvasElement;
 const contoursBox = document.getElementById('contours') as HTMLInputElement;
 const status = document.getElementById('status') as HTMLElement;
 const viewPicker = document.getElementById('view') as HTMLSelectElement;
-const surfaceCanvas = document.getElementById('surface') as HTMLCanvasElement;
+let surfaceCanvas = document.getElementById('surface') as HTMLCanvasElement;
+const pathOut = document.getElementById('path') as HTMLElement;
 const playButton = document.getElementById('play') as HTMLButtonElement;
 const retryButton = document.getElementById('retry') as HTMLButtonElement;
 const stepsOut = document.getElementById('steps') as HTMLOutputElement;
@@ -63,17 +65,19 @@ for (const id of presetIds) {
 
 let surface: Surface | null = null;
 let surfaceFailed: string | null = null;
-let camera: OrbitState = defaultOrbit(gridSize);
+/** Edge of the grid on show: the preview's, until a run says what size its path uses. */
+let size = gridSize;
+let camera: OrbitState = defaultOrbit(size);
 
 function ensureSurface(): Surface | null {
   if (surface || surfaceFailed) return surface;
-  const result = createSurface(surfaceCanvas, gridSize);
+  const result = createSurface(surfaceCanvas, size);
   if (!result.ok) {
     surfaceFailed = result.reason;
     return null;
   }
   surface = result.surface;
-  attachOrbitControls(surfaceCanvas, gridSize, () => camera, (s) => (camera = s), () => requestAnimationFrame(redraw));
+  attachOrbitControls(surfaceCanvas, size, () => camera, (s) => (camera = s), () => requestAnimationFrame(redraw));
   return surface;
 }
 
@@ -89,9 +93,9 @@ function syncControls(): void {
   playButton.disabled = starting;
   retryButton.hidden = failure === null;
   if (failure !== null) status.textContent = failure;
-  else if (starting) status.textContent = 'Starting the simulation...';
+  else if (starting) status.textContent = 'Starting the simulation (compiling shaders)...';
   else if (replaying) status.textContent = `Replaying to step ${timeInput.value}...`;
-  else if (status.textContent?.startsWith('Replaying') || status.textContent === 'Starting the simulation...') status.textContent = '';
+  else if (status.textContent?.startsWith('Replaying') || status.textContent === 'Starting the simulation (compiling shaders)...') status.textContent = '';
 }
 
 let replaying = false;
@@ -103,14 +107,27 @@ function showFrame(steps: number, reached: number, height: Float32Array, water: 
   timeInput.setAttribute('aria-valuetext', `Step ${steps} of ${reached}`);
   replaying = false;
   latest = height;
-  overlay = waterOverlay(height, water, gridSize);
+  overlay = waterOverlay(height, water, size);
   stepsOut.textContent = `Step ${steps}`;
   drawReliefHeights(main, height, contoursBox.checked, overlay);
-  if (surface && !surfaceCanvas.hidden) {
-    surface.setHeights(overlay.surface);
-    surface.setWater(overlay.wetness, overlay.alpha);
+  const shown = surfaceCanvas.hidden ? null : ensureSurface();
+  if (shown) {
+    shown.setHeights(overlay.surface);
+    shown.setWater(overlay.wetness, overlay.alpha);
     requestAnimationFrame(redraw);
   }
+}
+
+/** A surface is built for one grid size; a different size needs a fresh canvas, since a canvas keeps its first context. */
+function resize(n: number): void {
+  if (n === size) return;
+  size = n;
+  camera = defaultOrbit(size);
+  const fresh = surfaceCanvas.cloneNode(false) as HTMLCanvasElement;
+  surfaceCanvas.replaceWith(fresh);
+  surfaceCanvas = fresh;
+  surface = null;
+  surfaceFailed = null;
 }
 
 function stopClient(): void {
@@ -136,6 +153,8 @@ function startClient(): void {
   const mine = createSimClient(worker as never, (m) => {
     if (client !== mine) return;
     if (m.type === 'ready') {
+      resize(m.n);
+      pathOut.textContent = m.label;
       starting = false;
       mine.send({type: 'play'});
       playing = true;
@@ -150,7 +169,7 @@ function startClient(): void {
   });
   client = mine;
   const {rain, hardness} = clampSettings({rain: Number(rainInput.value), hardness: Number(hardnessInput.value)});
-  mine.send({type: 'init', n: gridSize, seed: parseSeed(seedInput.value, 1), preset: picker.value as PresetId, rain, hardness});
+  mine.send({type: 'init', n: gridSize, gpuN: gpuGridSize, seed: parseSeed(seedInput.value, 1), preset: picker.value as PresetId, rain, hardness});
   syncControls();
 }
 
@@ -185,6 +204,8 @@ function render(reset = true): void {
     timeInput.value = '0';
     timeInput.disabled = true;
     replaying = false;
+    pathOut.textContent = '';
+    resize(gridSize);
     syncControls();
   }
   const seed = parseSeed(seedInput.value, 1);
@@ -201,7 +222,7 @@ function render(reset = true): void {
     if (s) {
       s.setHeights(overlay?.surface ?? latest ?? generateTerrain(gridSize, seed, preset));
       if (overlay) s.setWater(overlay.wetness, overlay.alpha);
-      else s.setWater(new Float32Array(gridSize * gridSize), new Float32Array(gridSize * gridSize));
+      else s.setWater(new Float32Array(size * size), new Float32Array(size * size));
       show3d = true;
     } else {
       message = `${surfaceFailed} The 2D relief is shown instead.`;

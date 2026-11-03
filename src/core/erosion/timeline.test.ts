@@ -77,7 +77,7 @@ describe('scenarios', () => {
       for (let i = 0; i < 200; i++) step(grid, paramsFor(scenarios[id]));
       pinned[id] = hashGrid(grid);
     }
-    expect(pinned).toEqual({alpine: '40ca7a10', hills: '4ca1d3dc', canyon: 'bcace206'});
+    expect(pinned).toEqual({alpine: '7430b96c', hills: '6c36d041', canyon: '1c87ab15'});
   });
 
   test('the three presets end in different landscapes', () => {

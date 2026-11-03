@@ -1,10 +1,12 @@
-import type {SimulationOptions, Snapshot} from './simulation';
+import type {Simulation, SimulationOptions, Snapshot} from './simulation';
+import {describePath, fallbackNotice, type SimPath} from './path';
 import {paramsFor} from './settings';
 import {createTimeline, type Timeline} from './timeline';
 import type {PresetId} from '../terrain/presets';
 
 export type Request =
-  | {type: 'init'; n: number; seed: number; preset: PresetId; rain: number; hardness: number}
+  /** `gpuN`, when present, asks for the GPU path at that size; `n` is the size the CPU path runs at. */
+  | {type: 'init'; n: number; gpuN?: number; seed: number; preset: PresetId; rain: number; hardness: number}
   | {type: 'play'}
   | {type: 'pause'}
   /** Pauses and jumps to a step, replaying from a checkpoint when it is behind the run. */
@@ -13,7 +15,8 @@ export type Request =
   | {type: 'ack'};
 
 export type Response =
-  | {type: 'ready'; n: number}
+  /** `n` is the grid the run actually uses, and `label` says which path steps it and why. */
+  | {type: 'ready'; n: number; path: SimPath; label: string}
   /** `reached` is the furthest step the run has been to, which bounds what can be scrubbed to. */
   | ({type: 'frame'; reached: number} & Snapshot)
   | {type: 'error'; message: string};
@@ -23,6 +26,8 @@ export interface RunnerEnv {
   /** Yields to the event loop so a pause or init message can arrive between batches. */
   schedule(fn: () => void): void;
   create?: (options: SimulationOptions) => Timeline;
+  /** Tries the GPU path; the reason it gives when it cannot becomes the page's notice. */
+  gpu?: (options: SimulationOptions) => {simulation: Simulation} | {reason: string};
 }
 
 /**
@@ -30,12 +35,13 @@ export interface RunnerEnv {
  * Stepping never waits for the page, but a frame is only posted once the previous one is acknowledged,
  * so a slow renderer drops frames instead of queueing them.
  */
-export function createRunner(env: RunnerEnv, stepsPerBatch = 4): (message: Request) => void {
+export function createRunner(env: RunnerEnv, stepsPerBatch = 4, gpuStepsPerBatch = 8): (message: Request) => void {
   const create = env.create ?? createTimeline;
   let sim: Timeline | null = null;
   let playing = false;
   let looping = false;
   let awaitingAck = false;
+  let batch = stepsPerBatch;
 
   function postFrame(): void {
     if (!sim) return;
@@ -48,7 +54,7 @@ export function createRunner(env: RunnerEnv, stepsPerBatch = 4): (message: Reque
     looping = false;
     if (!playing || !sim) return;
     try {
-      sim.advance(stepsPerBatch);
+      sim.advance(batch);
       if (!awaitingAck) postFrame();
     } catch (e) {
       playing = false;
@@ -64,9 +70,25 @@ export function createRunner(env: RunnerEnv, stepsPerBatch = 4): (message: Reque
       switch (message.type) {
         case 'init':
           playing = false;
-          sim = create({n: message.n, seed: message.seed, preset: message.preset, params: paramsFor(message)});
+          const params = paramsFor(message);
+          let path: SimPath = 'cpu';
+          let notice: string | undefined;
+          sim = null;
+          if (message.gpuN) {
+            const options = {n: message.gpuN, seed: message.seed, preset: message.preset, params};
+            const attempt = env.gpu ? env.gpu(options) : {reason: 'the GPU path is not available here'};
+            if ('simulation' in attempt) {
+              sim = createTimeline(options, {create: () => attempt.simulation});
+              path = 'gpu';
+            } else {
+              notice = fallbackNotice(attempt.reason);
+            }
+          }
+          const n = path === 'gpu' ? message.gpuN! : message.n;
+          sim ??= create({n, seed: message.seed, preset: message.preset, params});
+          batch = path === 'gpu' ? gpuStepsPerBatch : stepsPerBatch;
           awaitingAck = false;
-          env.post({type: 'ready', n: message.n}, []);
+          env.post({type: 'ready', n, path, label: describePath(path, n, notice)}, []);
           postFrame();
           break;
         case 'play':

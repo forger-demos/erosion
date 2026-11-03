@@ -1,6 +1,6 @@
 import {describe, expect, test} from 'bun:test';
 import {gridSize} from './heightmap';
-import {drawRelief} from './relief';
+import {drawRelief, drawReliefHeights} from './relief';
 
 describe('drawRelief', () => {
   test('reports failure when the canvas has no 2D context', () => {
@@ -24,5 +24,17 @@ describe('drawRelief', () => {
     let coloured = false;
     for (let i = 0; i < d.length; i += 4) coloured ||= d[i] !== d[i + 1] || d[i + 1] !== d[i + 2];
     expect(coloured).toBe(true);
+  });
+
+  test('sizes the canvas from the height field, so a larger grid is not read as rows of the default width', () => {
+    const sizes: number[] = [];
+    const ctx = {
+      createImageData: (w: number, h: number) => (sizes.push(w, h), {data: new Uint8ClampedArray(w * h * 4)}),
+      putImageData: () => {},
+    };
+    const canvas = {getContext: () => ctx, width: 0, height: 0} as unknown as HTMLCanvasElement;
+    drawReliefHeights(canvas, new Float32Array(40 * 40), false);
+    expect(sizes).toEqual([40, 40]);
+    expect([canvas.width, canvas.height]).toEqual([40, 40]);
   });
 });

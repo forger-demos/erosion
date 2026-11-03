@@ -20,6 +20,12 @@ Three tiers behind one interface that takes a seed, parameters and a step count 
 
 The GPU path is checked against the reference within a stated tolerance on small grids (it is not bit-identical; see [determinism-and-invariants.md](determinism-and-invariants.md)). Feature detection picks the path; the page says which is running.
 
+## As built
+
+The worker owns both paths. On `init` it asks `detectGpu` for a WebGL2 context on an `OffscreenCanvas` with `EXT_color_buffer_float`; if that and shader compilation succeed, `createGpuSimulation` steps the model and the run uses the larger GPU grid, otherwise the CPU reference runs at its own size and the page shows the reason. Both sit behind the `Simulation` interface, so the timeline, checkpoints and scrubbing are shared. The grid sizes per path are in `src/core/erosion/path.ts`.
+
+Four passes per step on RGBA32F textures: outflow flux with rain, then depth, velocity and erosion, then sediment transport, then evaporation and thermal weathering. The CPU scatters sediment and thermal material to neighbours; the passes gather the same amounts instead, so only the order of float additions differs. The CPU erosion stage reads the bed as the stage began, the same as the passes do. Measure speed with `bun run bench` for the CPU and by watching the step counter on the page for the GPU.
+
 ## Sources
 
 - Browser support for WebGPU: <https://caniuse.com/webgpu>
