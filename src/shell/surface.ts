@@ -1,11 +1,13 @@
 import {viewProjection, eyePosition, orbitTarget, type OrbitState} from '../core/camera/orbit';
-import {fogColour, fragmentShader, vertexShader} from './shaders';
+import {skyColours, fragmentShader, type Theme, vertexShader} from './shaders';
 
 export interface Surface {
   /** Replaces the surface shown: the bed, with lakes drawn flat at their water level. */
   setHeights(heights: Float32Array): void;
   /** Replaces the water layer: per cell, wetness then water opacity. Absent means dry. */
   setWater(wetness: Float32Array, alpha: Float32Array): void;
+  /** The haze and background follow the page theme. */
+  setTheme(theme: Theme): void;
   draw(state: OrbitState): void;
 }
 
@@ -71,6 +73,8 @@ export function createSurface(canvas: HTMLCanvasElement, n: number): SurfaceResu
     gl.uniform1i(gl.getUniformLocation(program, 'uWater'), 1);
     const pair = new Float32Array(n * n * 2);
     const viewProjectionLoc = gl.getUniformLocation(program, 'uViewProjection');
+    const skyLoc = gl.getUniformLocation(program, 'uSky');
+    let sky = skyColours.light;
     const eyeLoc = gl.getUniformLocation(program, 'uEye');
     const context = gl;
     return {
@@ -90,6 +94,9 @@ export function createSurface(canvas: HTMLCanvasElement, n: number): SurfaceResu
           context.texSubImage2D(context.TEXTURE_2D, 0, 0, 0, n, n, context.RG, context.FLOAT, pair);
           context.activeTexture(context.TEXTURE0);
         },
+        setTheme(theme) {
+          sky = skyColours[theme];
+        },
         draw(state) {
           const w = canvas.clientWidth * (globalThis.devicePixelRatio || 1);
           const h = canvas.clientHeight * (globalThis.devicePixelRatio || 1);
@@ -98,7 +105,7 @@ export function createSurface(canvas: HTMLCanvasElement, n: number): SurfaceResu
             canvas.height = Math.max(1, Math.round(h));
           }
           context.viewport(0, 0, canvas.width, canvas.height);
-          context.clearColor(fogColour[0], fogColour[1], fogColour[2], 1);
+          context.clearColor(sky[0], sky[1], sky[2], 1);
           context.enable(context.DEPTH_TEST);
           context.clear(context.COLOR_BUFFER_BIT | context.DEPTH_BUFFER_BIT);
           context.useProgram(program);
@@ -108,6 +115,7 @@ export function createSurface(canvas: HTMLCanvasElement, n: number): SurfaceResu
           context.bindTexture(context.TEXTURE_2D, waterTexture);
           context.activeTexture(context.TEXTURE0);
           context.uniformMatrix4fv(viewProjectionLoc, false, viewProjection(state, canvas.width / canvas.height, n));
+          context.uniform3fv(skyLoc, sky);
           context.uniform3fv(eyeLoc, eyePosition(state, orbitTarget(n)));
           context.drawElements(context.TRIANGLES, indices.length, context.UNSIGNED_INT, 0);
         },

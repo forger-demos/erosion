@@ -38,6 +38,12 @@ function sample(l: Lattice, step: number, px: number, py: number): number {
   return top + (bottom - top) * sy;
 }
 
+/** Folds a coordinate back into [0, limit]. Clamping instead would send every cell the warp pushes past an edge to the same border sample, which draws streaks along that edge. */
+function reflect(v: number, limit: number): number {
+  const folded = v < 0 ? -v : v > limit ? 2 * limit - v : v;
+  return folded < 0 ? 0 : folded > limit ? limit : folded;
+}
+
 /** A height field of n x n cells, row-major, from a seed and a preset. */
 export function generateTerrain(n: number, seed: number, presetId: PresetId): Float32Array {
   const preset = presets[presetId];
@@ -68,8 +74,8 @@ export function generateTerrain(n: number, seed: number, presetId: PresetId): Fl
           const shift = n * preset.warp;
           px += (sample(warpX, warpStep, x, y) * 2 - 1) * shift;
           py += (sample(warpY, warpStep, x, y) * 2 - 1) * shift;
-          px = px < 0 ? 0 : px > limit ? limit : px;
-          py = py < 0 ? 0 : py > limit ? limit : py;
+          px = reflect(px, limit);
+          py = reflect(py, limit);
         }
         let v = sample(lattice, step, px, py);
         if (preset.ridged) {

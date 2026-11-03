@@ -11,6 +11,8 @@ import {createSimClient, type SimClient} from './simClient';
 import {gpuGridSize} from '../core/erosion/path';
 import {exportFilename, heightmapPng, shadedPng, type ExportKind} from '../core/export/images';
 import {download} from './download';
+import {describeStatus} from './status';
+import type {Theme} from './shaders';
 
 const seedInput = document.getElementById('seed') as HTMLInputElement;
 const picker = document.getElementById('preset') as HTMLSelectElement;
@@ -83,6 +85,7 @@ function ensureSurface(): Surface | null {
     return null;
   }
   surface = result.surface;
+  surface.setTheme(theme());
   attachOrbitControls(surfaceCanvas, size, () => camera, (s) => (camera = s), () => requestAnimationFrame(redraw));
   return surface;
 }
@@ -99,13 +102,33 @@ function syncControls(): void {
   playButton.disabled = starting;
   retryButton.hidden = failure === null;
   syncExport();
-  if (failure !== null) status.textContent = failure;
-  else if (starting) status.textContent = 'Starting the simulation (compiling shaders)...';
-  else if (replaying) status.textContent = `Replaying to step ${timeInput.value}...`;
-  else if (status.textContent?.startsWith('Replaying') || status.textContent === 'Starting the simulation (compiling shaders)...') status.textContent = '';
+  showStatus();
 }
 
 let replaying = false;
+let terrainFailed = false;
+let exportResult: string | null = null;
+let surfaceNote: string | null = null;
+
+function showStatus(): void {
+  status.textContent = describeStatus({
+    terrainFailed,
+    failure,
+    starting,
+    replayingTo: replaying ? Number(timeInput.value) : null,
+    exporting: pendingExport !== null,
+    exportResult,
+    surfaceNote,
+    hasRun: latest !== null,
+  });
+}
+
+const dark = matchMedia('(prefers-color-scheme: dark)');
+const theme = (): Theme => (dark.matches ? 'dark' : 'light');
+dark.addEventListener('change', () => {
+  surface?.setTheme(theme());
+  requestAnimationFrame(redraw);
+});
 /** What the current run was started with and the file the viewer asked for, until the worker's reference answers. */
 let runInfo: {seed: number; preset: PresetId} | null = null;
 let pendingExport: ExportKind | null = null;
@@ -209,19 +232,19 @@ function finishExport(steps: number, n: number, height: Float32Array, water: Flo
   try {
     const bytes = kind === 'heightmap' ? heightmapPng(height, n) : shadedPng(height, water, n, contoursBox.checked);
     download(exportFilename(kind, runInfo.preset, runInfo.seed, steps), bytes);
-    status.textContent = `Saved the ${kind === 'heightmap' ? 'heightmap' : 'shaded image'} for step ${steps} from the CPU reference, ${n} x ${n} cells.`;
+    exportResult = `Saved the ${kind === 'heightmap' ? 'heightmap' : 'shaded image'} for step ${steps} from the CPU reference, ${n} x ${n} cells.`;
   } catch (e) {
-    status.textContent = `The export failed: ${e instanceof Error ? e.message : String(e)}`;
+    exportResult = `The export failed: ${e instanceof Error ? e.message : String(e)}`;
   }
-  syncExport();
+  syncControls();
 }
 
 for (const [kind, button] of Object.entries(exportButtons) as [ExportKind, HTMLButtonElement][]) {
   button.addEventListener('click', () => {
     if (!client || pendingExport) return;
     pendingExport = kind;
-    status.textContent = 'Running the CPU reference for the export...';
-    syncExport();
+    exportResult = null;
+    syncControls();
     client.send({type: 'export', step: Number(timeInput.value)});
   });
 }
@@ -229,6 +252,7 @@ for (const [kind, button] of Object.entries(exportButtons) as [ExportKind, HTMLB
 timeInput.addEventListener('input', () => {
   if (!client) return;
   playing = false;
+  exportResult = null;
   replaying = true;
   client.send({type: 'seek', step: Number(timeInput.value)});
   syncControls();
@@ -250,6 +274,7 @@ function render(reset = true): void {
     timeInput.disabled = true;
     replaying = false;
     runInfo = null;
+    exportResult = null;
     pathOut.textContent = '';
     resize(gridSize);
     syncControls();
@@ -261,10 +286,10 @@ function render(reset = true): void {
   const ok =
     (latest ? drawReliefHeights(main, latest, contoursBox.checked, overlay ?? undefined) : drawRelief(main, seed, preset, contoursBox.checked)) &&
     presetIds.every((id) => drawRelief(thumbs.get(id)!, seed, id, contoursBox.checked));
-  let message = ok ? '' : 'This browser cannot draw the relief: the 2D canvas is unavailable.';
+  terrainFailed = !ok;
+  surfaceNote = null;
   let show3d = false;
   if (ok && viewPicker.value === '3d') {
-    status.textContent = 'Starting the 3D view...';
     const s = ensureSurface();
     if (s) {
       s.setHeights(overlay?.surface ?? latest ?? generateTerrain(gridSize, seed, preset));
@@ -272,11 +297,11 @@ function render(reset = true): void {
       else s.setWater(new Float32Array(size * size), new Float32Array(size * size));
       show3d = true;
     } else {
-      message = `${surfaceFailed} The 2D relief is shown instead.`;
+      surfaceNote = surfaceFailed;
       viewPicker.value = '2d';
     }
   }
-  status.textContent = message;
+  showStatus();
   main.hidden = !ok || show3d;
   surfaceCanvas.hidden = !show3d;
   strip.hidden = !ok;

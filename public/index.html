@@ -13,14 +13,16 @@ label{display:grid;gap:.25rem;color:var(--muted);font-size:.875rem}
 input,select{font:inherit;padding:.4rem .6rem;color:var(--fg);background:transparent;border:1px solid var(--muted);border-radius:.25rem}
 input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 [hidden]{display:none!important}
-canvas{display:block;width:100%;height:auto;aspect-ratio:1;background:var(--muted);image-rendering:pixelated}
+canvas{display:block;width:100%;height:auto;aspect-ratio:1;background:var(--muted);image-rendering:auto}
 #strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:1rem;margin-top:1rem}
 figure{margin:0}figcaption{color:var(--muted);font-size:.875rem}
 #surface{touch-action:none;cursor:grab;image-rendering:auto}#surface:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 button{font:inherit;padding:.4rem .9rem;color:var(--fg);background:transparent;border:1px solid var(--muted);border-radius:.25rem;cursor:pointer}button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .run{display:flex;gap:.75rem;align-items:center}output{color:var(--muted);font-variant-numeric:tabular-nums}
 input[type=range]{padding:0;accent-color:var(--accent)}.time{display:flex;gap:.75rem;align-items:center;margin-bottom:.5rem}.time input{flex:1}
-#status{color:var(--muted)}
+#status{color:var(--muted);min-height:1.5em;margin:.5rem 0}
+button:disabled,input:disabled{opacity:.5;cursor:not-allowed}
+.noscript{padding:1rem;border:1px solid var(--muted);border-radius:.25rem}
 </style>
 </head>
 <body>
@@ -37,6 +39,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}.time{display:flex;gap:.7
 <label><span><input id="contours" type="checkbox" checked> Contour lines</span></label>
 </form>
 <div class="time"><label for="time">Time</label><input id="time" type="range" min="0" max="0" step="1" value="0" disabled aria-describedby="steps"></div>
+<noscript><p class="noscript">This demo needs JavaScript to generate and erode terrain.</p></noscript>
 <p id="status" role="status">Generating terrain...</p>
 <p id="path" role="status"></p>
 <canvas id="main" width="256" height="256" role="img" aria-label="Shaded relief map of the selected preset, coloured by height and slope"></canvas>
