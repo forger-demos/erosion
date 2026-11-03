@@ -9,7 +9,7 @@ import type {Grid, Params} from './grid';
 export function step(grid: Grid, p: Params): void {
   const {n, b, d, s, fl, fr, ft, fb, vx, vy, d1, d2, db} = grid;
   const cellArea = p.cell * p.cell;
-  const idx = (x: number, y: number) => y * n + x;
+  const k = p.dt * p.pipeArea * p.g / p.cell;
 
   // 1. rain
   for (let i = 0; i < n * n; i++) {
@@ -23,9 +23,8 @@ export function step(grid: Grid, p: Params): void {
   // 2. outflow flux, scaled so no cell sends out more water than it holds
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
-      const i = idx(x, y);
+      const i = y * n + x;
       const h = b[i]! + d1[i]!;
-      const k = p.dt * p.pipeArea * p.g / p.cell;
       let l = x > 0 ? Math.max(0, fl[i]! + k * (h - b[i - 1]! - d1[i - 1]!)) : 0;
       let r = x < n - 1 ? Math.max(0, fr[i]! + k * (h - b[i + 1]! - d1[i + 1]!)) : 0;
       let t = y > 0 ? Math.max(0, ft[i]! + k * (h - b[i - n]! - d1[i - n]!)) : 0;
@@ -48,7 +47,7 @@ export function step(grid: Grid, p: Params): void {
   // 3. water depth from net flux
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
-      const i = idx(x, y);
+      const i = y * n + x;
       const inflow =
         (x > 0 ? fr[i - 1]! : 0) +
         (x < n - 1 ? fl[i + 1]! : 0) +
@@ -63,7 +62,7 @@ export function step(grid: Grid, p: Params): void {
   // 4. velocity from flux
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
-      const i = idx(x, y);
+      const i = y * n + x;
       const mean = (d1[i]! + d2[i]!) / 2;
       if (mean < 1e-4) {
         vx[i] = 0;
@@ -80,7 +79,7 @@ export function step(grid: Grid, p: Params): void {
   // 5. erosion and deposition; water depth is untouched, mass moves between b and s
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
-      const i = idx(x, y);
+      const i = y * n + x;
       const gx = (b[x < n - 1 ? i + 1 : i]! - b[x > 0 ? i - 1 : i]!) / ((x > 0 && x < n - 1 ? 2 : 1) * p.cell);
       const gy = (b[y < n - 1 ? i + n : i]! - b[y > 0 ? i - n : i]!) / ((y > 0 && y < n - 1 ? 2 : 1) * p.cell);
       const slope = Math.sqrt(gx * gx + gy * gy);
@@ -105,21 +104,30 @@ export function step(grid: Grid, p: Params): void {
   moved.fill(0);
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
-      const i = idx(x, y);
+      const i = y * n + x;
       const volume = d1[i]! * cellArea;
       if (volume <= 0 || s[i]! <= 0) continue;
       const per = (s[i]! * p.dt) / volume;
-      const sends: [number, number][] = [
-        [x > 0 ? i - 1 : -1, fl[i]!],
-        [x < n - 1 ? i + 1 : -1, fr[i]!],
-        [y > 0 ? i - n : -1, ft[i]!],
-        [y < n - 1 ? i + n : -1, fb[i]!],
-      ];
-      for (const [to, flux] of sends) {
-        if (to < 0 || flux <= 0) continue;
-        const amount = per * flux;
+      // Neighbours in the order left, right, up, down; the order fixes the float32 sums.
+      if (x > 0 && fl[i]! > 0) {
+        const amount = per * fl[i]!;
         moved[i] = moved[i]! - amount;
-        moved[to] = moved[to]! + amount;
+        moved[i - 1] = moved[i - 1]! + amount;
+      }
+      if (x < n - 1 && fr[i]! > 0) {
+        const amount = per * fr[i]!;
+        moved[i] = moved[i]! - amount;
+        moved[i + 1] = moved[i + 1]! + amount;
+      }
+      if (y > 0 && ft[i]! > 0) {
+        const amount = per * ft[i]!;
+        moved[i] = moved[i]! - amount;
+        moved[i - n] = moved[i - n]! + amount;
+      }
+      if (y < n - 1 && fb[i]! > 0) {
+        const amount = per * fb[i]!;
+        moved[i] = moved[i]! - amount;
+        moved[i + n] = moved[i + n]! + amount;
       }
     }
   }
@@ -132,20 +140,28 @@ export function step(grid: Grid, p: Params): void {
     grid.evaporated += before - d[i]!;
   }
 
-  // 8. thermal weathering: material slumps from over-steep cells to lower neighbours
+  // 8. thermal weathering: material slumps from over-steep cells to lower neighbours.
+  // Eight neighbours, the diagonals at sqrt(2) the distance, so slumping has no preferred
+  // axis; four neighbours alone leave terraces along the grid lines.
   db.fill(0);
   const reach = p.talus * p.cell;
+  const diagReach = reach * Math.sqrt(2);
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
-      const i = idx(x, y);
-      const targets = [x > 0 ? i - 1 : -1, x < n - 1 ? i + 1 : -1, y > 0 ? i - n : -1, y < n - 1 ? i + n : -1];
-      for (const to of targets) {
-        if (to < 0) continue;
-        const excess = b[i]! - b[to]! - reach;
-        if (excess <= 0) continue;
-        const amount = (p.thermalRate * excess) / 2;
-        db[i] = db[i]! - amount;
-        db[to] = db[to]! + amount;
+      const i = y * n + x;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= n) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= n || (dx === 0 && dy === 0)) continue;
+          const to = yy * n + xx;
+          const excess = b[i]! - b[to]! - (dx !== 0 && dy !== 0 ? diagReach : reach);
+          if (excess <= 0) continue;
+          const amount = (p.thermalRate * excess) / 2;
+          db[i] = db[i]! - amount;
+          db[to] = db[to]! + amount;
+        }
       }
     }
   }

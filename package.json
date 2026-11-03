@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "PORT=${PORT:-3102} bun src/server.ts",
+    "bench": "bun scripts/bench.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test --coverage --coverage-reporter=lcov --coverage-reporter=text",
     "check": "bun run typecheck && bun run test"

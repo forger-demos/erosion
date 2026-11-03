@@ -10,4 +10,7 @@ The owner's brief is [docs/brief.md](docs/brief.md). A forger work loop builds i
 bun install
 bun run start
 bun run check
+bun run bench          # step cost per grid size; optional args: sizes, steps
 ```
+
+The erosion steps run in a Web Worker (`src/shell/simWorker.ts`) behind the `Simulation` interface in `src/core/erosion/`; the page only renders the frames it sends.

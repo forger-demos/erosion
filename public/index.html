@@ -17,6 +17,8 @@ canvas{display:block;width:100%;height:auto;aspect-ratio:1;background:var(--mute
 #strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:1rem;margin-top:1rem}
 figure{margin:0}figcaption{color:var(--muted);font-size:.875rem}
 #surface{touch-action:none;cursor:grab;image-rendering:auto}#surface:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{font:inherit;padding:.4rem .9rem;color:var(--fg);background:transparent;border:1px solid var(--muted);border-radius:.25rem;cursor:pointer}button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.run{display:flex;gap:.75rem;align-items:center}output{color:var(--muted);font-variant-numeric:tabular-nums}
 #status{color:var(--muted)}
 </style>
 </head>
@@ -27,6 +29,7 @@ figure{margin:0}figcaption{color:var(--muted);font-size:.875rem}
 <label>Seed<input id="seed" type="text" inputmode="numeric" value="1"></label>
 <label>Preset<select id="preset"></select></label>
 <label>View<select id="view"><option value="2d">2D relief</option><option value="3d">3D surface</option></select></label>
+<div class="run"><button id="play" type="button">Play</button><button id="retry" type="button" hidden>Retry</button><output id="steps" aria-live="off">Step 0</output></div>
 <label><span><input id="contours" type="checkbox" checked> Contour lines</span></label>
 </form>
 <p id="status" role="status">Generating terrain...</p>

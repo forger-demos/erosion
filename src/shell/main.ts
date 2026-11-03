@@ -4,7 +4,8 @@ import {generateTerrain} from '../core/terrain/noise';
 import {gridSize, parseSeed} from './heightmap';
 import {attachOrbitControls} from './orbitControls';
 import {createSurface, type Surface} from './surface';
-import {drawRelief} from './relief';
+import {drawRelief, drawReliefHeights} from './relief';
+import {createSimClient, type SimClient} from './simClient';
 
 const seedInput = document.getElementById('seed') as HTMLInputElement;
 const picker = document.getElementById('preset') as HTMLSelectElement;
@@ -13,6 +14,9 @@ const contoursBox = document.getElementById('contours') as HTMLInputElement;
 const status = document.getElementById('status') as HTMLElement;
 const viewPicker = document.getElementById('view') as HTMLSelectElement;
 const surfaceCanvas = document.getElementById('surface') as HTMLCanvasElement;
+const playButton = document.getElementById('play') as HTMLButtonElement;
+const retryButton = document.getElementById('retry') as HTMLButtonElement;
+const stepsOut = document.getElementById('steps') as HTMLOutputElement;
 const strip = document.getElementById('strip') as HTMLElement;
 
 for (const id of presetIds) {
@@ -49,16 +53,95 @@ function ensureSurface(): Surface | null {
   return surface;
 }
 
+let client: SimClient | null = null;
+let latest: Float32Array | null = null;
+let playing = false;
+let starting = false;
+let failure: string | null = null;
+
+function syncControls(): void {
+  playButton.textContent = playing ? 'Pause' : 'Play';
+  playButton.disabled = starting;
+  retryButton.hidden = failure === null;
+  if (failure !== null) status.textContent = failure;
+  else if (starting) status.textContent = 'Starting the simulation...';
+  else if (status.textContent === 'Starting the simulation...') status.textContent = '';
+}
+
+function showFrame(steps: number, height: Float32Array): void {
+  latest = height;
+  stepsOut.textContent = `Step ${steps}`;
+  drawReliefHeights(main, height, contoursBox.checked);
+  if (surface && !surfaceCanvas.hidden) {
+    surface.setHeights(height);
+    requestAnimationFrame(redraw);
+  }
+}
+
+function stopClient(): void {
+  client?.dispose();
+  client = null;
+  playing = false;
+  starting = false;
+}
+
+function startClient(): void {
+  stopClient();
+  failure = null;
+  starting = true;
+  let worker: Worker;
+  try {
+    worker = new Worker('worker.js', {type: 'module'});
+  } catch {
+    failure = 'This browser cannot start the simulation worker.';
+    starting = false;
+    syncControls();
+    return;
+  }
+  const mine = createSimClient(worker as never, (m) => {
+    if (client !== mine) return;
+    if (m.type === 'ready') {
+      starting = false;
+      mine.send({type: 'play'});
+      playing = true;
+    } else if (m.type === 'frame') {
+      showFrame(m.steps, m.height);
+    } else if (m.type === 'error') {
+      failure = `The simulation stopped: ${m.message}`;
+      stopClient();
+    }
+    syncControls();
+  });
+  client = mine;
+  mine.send({type: 'init', n: gridSize, seed: parseSeed(seedInput.value, 1), preset: picker.value as PresetId});
+  syncControls();
+}
+
+playButton.addEventListener('click', () => {
+  if (!client) return startClient();
+  playing = !playing;
+  client.send({type: playing ? 'play' : 'pause'});
+  syncControls();
+});
+retryButton.addEventListener('click', startClient);
+
 function redraw(): void {
   surface?.draw(camera);
 }
 
-function render(): void {
+function render(reset = true): void {
+  if (reset && (client || latest)) {
+    stopClient();
+    latest = null;
+    failure = null;
+    stepsOut.textContent = 'Step 0';
+    syncControls();
+  }
   const seed = parseSeed(seedInput.value, 1);
   seedInput.value = String(seed);
   const preset = picker.value as PresetId;
   const ok =
-    drawRelief(main, seed, preset, contoursBox.checked) &&
+    (latest ? drawReliefHeights(main, latest, contoursBox.checked) : drawRelief(main, seed, preset, contoursBox.checked)) &&
     presetIds.every((id) => drawRelief(thumbs.get(id)!, seed, id, contoursBox.checked));
   let message = ok ? '' : 'This browser cannot draw the relief: the 2D canvas is unavailable.';
   let show3d = false;
@@ -66,7 +149,7 @@ function render(): void {
     status.textContent = 'Starting the 3D view...';
     const s = ensureSurface();
     if (s) {
-      s.setHeights(generateTerrain(gridSize, seed, preset));
+      s.setHeights(latest ?? generateTerrain(gridSize, seed, preset));
       show3d = true;
     } else {
       message = `${surfaceFailed} The 2D relief is shown instead.`;
@@ -80,10 +163,10 @@ function render(): void {
   if (show3d) requestAnimationFrame(redraw);
 }
 
-seedInput.addEventListener('change', render);
-picker.addEventListener('change', render);
+seedInput.addEventListener('change', () => render());
+picker.addEventListener('change', () => render());
 if (new URLSearchParams(location.search).get('view') === '3d') viewPicker.value = '3d';
-contoursBox.addEventListener('change', render);
-viewPicker.addEventListener('change', render);
+contoursBox.addEventListener('change', () => render(false));
+viewPicker.addEventListener('change', () => render(false));
 window.addEventListener('resize', () => requestAnimationFrame(redraw));
 render();
