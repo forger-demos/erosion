@@ -1,6 +1,7 @@
 import {afterAll, beforeAll, describe, expect, setDefaultTimeout, test} from 'bun:test';
 import {chromium, type Browser, type Page} from 'playwright';
 import {paramsFor, scenarios} from '../../core/erosion/settings';
+import {cpuGridSize, gpuGridSize} from '../../core/erosion/path';
 import {createSimulation} from '../../core/erosion/simulation';
 import {presetIds, type PresetId} from '../../core/terrain/presets';
 import type {GpuRun} from './browserEntry';
@@ -99,5 +100,33 @@ describe('WebGL2 path against the CPU reference', () => {
     const a = await run('hills');
     const b = await run('hills');
     expect(b).toEqual(a);
+  });
+});
+
+const software = /swiftshader|llvmpipe|software|basic render/i;
+
+describe('WebGL2 path speed', () => {
+  test('on a hardware GPU a grid larger than the CPU path uses steps faster than the CPU steps its own', async () => {
+    const hardware = await chromium.launch({channel: 'chrome', args: ['--ignore-gpu-blocklist', '--enable-gpu']}).catch(() => null);
+    if (!hardware) return console.warn('GPU speed test skipped: no browser could be started');
+    try {
+      const probe = await hardware.newPage();
+      await probe.setContent('<html></html>');
+      const out = await Bun.build({entrypoints: [new URL('./browserEntry.ts', import.meta.url).pathname], target: 'browser'});
+      await probe.addScriptTag({content: await out.outputs[0]!.text()});
+      const renderer = await probe.evaluate(() => window.gpuRenderer());
+      if (software.test(renderer) || (await probe.evaluate(() => window.gpuAvailable()))) return console.warn(`GPU speed test skipped: no hardware WebGL2 device (${renderer})`);
+      const gpuMs = await probe.evaluate(([size, steps]) => window.timeGpu(size, steps), [gpuGridSize, 100] as const);
+      const sim = createSimulation({n: cpuGridSize, seed: 1, preset: 'alpine'});
+      sim.advance(10);
+      const start = performance.now();
+      sim.advance(30);
+      const cpuMs = (performance.now() - start) / 30;
+      // 60 frames a second with one step per frame is the floor for interactive; the CPU number is the grid it manages.
+      expect(gpuMs).toBeLessThan(1000 / 60);
+      expect(gpuMs).toBeLessThan(cpuMs);
+    } finally {
+      await hardware.close();
+    }
   });
 });
