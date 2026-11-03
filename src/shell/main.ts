@@ -6,6 +6,7 @@ import {attachOrbitControls} from './orbitControls';
 import {createSurface, type Surface} from './surface';
 import {drawRelief, drawReliefHeights} from './relief';
 import {waterOverlay, type WaterOverlay} from '../core/water/overlay';
+import {clampSettings, hardnessRange, rainRange, scenarios} from '../core/erosion/settings';
 import {createSimClient, type SimClient} from './simClient';
 
 const seedInput = document.getElementById('seed') as HTMLInputElement;
@@ -18,6 +19,11 @@ const surfaceCanvas = document.getElementById('surface') as HTMLCanvasElement;
 const playButton = document.getElementById('play') as HTMLButtonElement;
 const retryButton = document.getElementById('retry') as HTMLButtonElement;
 const stepsOut = document.getElementById('steps') as HTMLOutputElement;
+const rainInput = document.getElementById('rain') as HTMLInputElement;
+const hardnessInput = document.getElementById('hardness') as HTMLInputElement;
+const rainOut = document.getElementById('rain-out') as HTMLOutputElement;
+const hardnessOut = document.getElementById('hardness-out') as HTMLOutputElement;
+const timeInput = document.getElementById('time') as HTMLInputElement;
 const strip = document.getElementById('strip') as HTMLElement;
 
 for (const id of presetIds) {
@@ -25,6 +31,23 @@ for (const id of presetIds) {
   option.value = id;
   option.textContent = presets[id].label;
   picker.append(option);
+}
+
+for (const [input, range] of [[rainInput, rainRange], [hardnessInput, hardnessRange]] as const) {
+  input.min = String(range.min);
+  input.max = String(range.max);
+  input.step = String(range.step);
+}
+
+function applyScenario(id: PresetId): void {
+  rainInput.value = String(scenarios[id].rain);
+  hardnessInput.value = String(scenarios[id].hardness);
+  showSettings();
+}
+
+function showSettings(): void {
+  rainOut.textContent = Number(rainInput.value).toFixed(3);
+  hardnessOut.textContent = Number(hardnessInput.value).toFixed(2);
 }
 
 const thumbs = new Map<PresetId, HTMLCanvasElement>();
@@ -67,10 +90,18 @@ function syncControls(): void {
   retryButton.hidden = failure === null;
   if (failure !== null) status.textContent = failure;
   else if (starting) status.textContent = 'Starting the simulation...';
-  else if (status.textContent === 'Starting the simulation...') status.textContent = '';
+  else if (replaying) status.textContent = `Replaying to step ${timeInput.value}...`;
+  else if (status.textContent?.startsWith('Replaying') || status.textContent === 'Starting the simulation...') status.textContent = '';
 }
 
-function showFrame(steps: number, height: Float32Array, water: Float32Array): void {
+let replaying = false;
+
+function showFrame(steps: number, reached: number, height: Float32Array, water: Float32Array): void {
+  timeInput.max = String(reached);
+  timeInput.value = String(steps);
+  timeInput.disabled = false;
+  timeInput.setAttribute('aria-valuetext', `Step ${steps} of ${reached}`);
+  replaying = false;
   latest = height;
   overlay = waterOverlay(height, water, gridSize);
   stepsOut.textContent = `Step ${steps}`;
@@ -109,15 +140,17 @@ function startClient(): void {
       mine.send({type: 'play'});
       playing = true;
     } else if (m.type === 'frame') {
-      showFrame(m.steps, m.height, m.water);
+      showFrame(m.steps, m.reached, m.height, m.water);
     } else if (m.type === 'error') {
       failure = `The simulation stopped: ${m.message}`;
+      replaying = false;
       stopClient();
     }
     syncControls();
   });
   client = mine;
-  mine.send({type: 'init', n: gridSize, seed: parseSeed(seedInput.value, 1), preset: picker.value as PresetId});
+  const {rain, hardness} = clampSettings({rain: Number(rainInput.value), hardness: Number(hardnessInput.value)});
+  mine.send({type: 'init', n: gridSize, seed: parseSeed(seedInput.value, 1), preset: picker.value as PresetId, rain, hardness});
   syncControls();
 }
 
@@ -128,6 +161,14 @@ playButton.addEventListener('click', () => {
   syncControls();
 });
 retryButton.addEventListener('click', startClient);
+
+timeInput.addEventListener('input', () => {
+  if (!client) return;
+  playing = false;
+  replaying = true;
+  client.send({type: 'seek', step: Number(timeInput.value)});
+  syncControls();
+});
 
 function redraw(): void {
   surface?.draw(camera);
@@ -140,6 +181,10 @@ function render(reset = true): void {
     overlay = null;
     failure = null;
     stepsOut.textContent = 'Step 0';
+    timeInput.max = '0';
+    timeInput.value = '0';
+    timeInput.disabled = true;
+    replaying = false;
     syncControls();
   }
   const seed = parseSeed(seedInput.value, 1);
@@ -171,9 +216,17 @@ function render(reset = true): void {
 }
 
 seedInput.addEventListener('change', () => render());
-picker.addEventListener('change', () => render());
+picker.addEventListener('change', () => {
+  applyScenario(picker.value as PresetId);
+  render();
+});
+for (const input of [rainInput, hardnessInput]) {
+  input.addEventListener('input', showSettings);
+  input.addEventListener('change', () => render());
+}
 if (new URLSearchParams(location.search).get('view') === '3d') viewPicker.value = '3d';
 contoursBox.addEventListener('change', () => render(false));
 viewPicker.addEventListener('change', () => render(false));
 window.addEventListener('resize', () => requestAnimationFrame(redraw));
+applyScenario(picker.value as PresetId);
 render();

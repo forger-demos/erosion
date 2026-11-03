@@ -1,8 +1,10 @@
 import {describe, expect, test} from 'bun:test';
 import {createRunner, type Request, type Response} from './protocol';
 import {createSimulation} from './simulation';
+import {paramsFor} from './settings';
+import type {Timeline} from './timeline';
 
-function harness(create?: typeof createSimulation) {
+function harness(create?: () => Timeline) {
   const out: Response[] = [];
   const queue: (() => void)[] = [];
   const send = createRunner({post: (m) => out.push(m), schedule: (fn) => queue.push(fn), create}, 2);
@@ -12,7 +14,7 @@ function harness(create?: typeof createSimulation) {
   const frames = () => out.filter((m) => m.type === 'frame') as Extract<Response, {type: 'frame'}>[];
   return {out, queue, send, pump, frames};
 }
-const init: Request = {type: 'init', n: 16, seed: 3, preset: 'hills'};
+const init: Request = {type: 'init', n: 16, seed: 3, preset: 'hills', rain: 0.012, hardness: 0.2};
 
 describe('simulation worker protocol', () => {
   test('init answers ready and sends step 0', () => {
@@ -55,7 +57,7 @@ describe('simulation worker protocol', () => {
     h.send({type: 'play'});
     h.pump(1);
     const frame = h.frames().at(-1)!;
-    const ref = createSimulation({n: 16, seed: 3, preset: 'hills'});
+    const ref = createSimulation({n: 16, seed: 3, preset: 'hills', params: paramsFor({rain: 0.012, hardness: 0.2})});
     ref.advance(frame.steps);
     expect(frame.height).toEqual(ref.snapshot().height);
   });
@@ -78,9 +80,11 @@ describe('simulation worker protocol', () => {
     const h = harness(() => ({
       n: 4,
       steps: 0,
+      reached: 0,
       advance: () => {
         throw new Error('boom');
       },
+      seek: () => {},
       snapshot: () => ({steps: 0, height: new Float32Array(1), water: new Float32Array(1), sediment: new Float32Array(1)}),
     }));
     h.send(init);
@@ -100,5 +104,37 @@ describe('simulation worker protocol', () => {
     h.send(init);
     h.pump(2);
     expect(h.frames().at(-1)!.steps).toBe(0);
+  });
+
+  test('seek pauses, jumps back and sends the same state as running there', () => {
+    const h = harness();
+    h.send(init);
+    h.send({type: 'ack'});
+    h.send({type: 'play'});
+    for (let i = 0; i < 4; i++) {
+      h.pump(1);
+      h.send({type: 'ack'});
+    }
+    h.pump(1);
+    const reached = h.frames().at(-1)!.reached;
+    expect(reached).toBeGreaterThan(2);
+    h.send({type: 'seek', step: 2});
+    h.pump(3);
+    const frame = h.frames().at(-1)!;
+    expect(frame.steps).toBe(2);
+    expect(frame.reached).toBe(reached);
+    const ref = createSimulation({n: 16, seed: 3, preset: 'hills', params: paramsFor({rain: 0.012, hardness: 0.2})});
+    ref.advance(2);
+    expect(frame.height).toEqual(ref.snapshot().height);
+    expect(h.queue.length).toBe(0);
+  });
+
+  test('seek before init and a bad step report errors', () => {
+    const h = harness();
+    h.send({type: 'seek', step: 1});
+    expect(h.out[0]!.type).toBe('error');
+    h.send(init);
+    h.send({type: 'seek', step: -1});
+    expect(h.out.at(-1)!.type).toBe('error');
   });
 });

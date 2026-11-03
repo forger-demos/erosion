@@ -10,11 +10,21 @@ export interface Snapshot {
   sediment: Float32Array;
 }
 
+/** Everything a run carries from one step to the next; restoring it resumes the run bit for bit. */
+export interface Checkpoint {
+  steps: number;
+  fields: Float32Array[];
+  rained: number;
+  evaporated: number;
+}
+
 export interface Simulation {
   readonly n: number;
   readonly steps: number;
   advance(count: number): void;
   snapshot(): Snapshot;
+  save(): Checkpoint;
+  restore(checkpoint: Checkpoint): void;
 }
 
 export interface SimulationOptions {
@@ -29,6 +39,8 @@ export function createSimulation({n, seed, preset, params = defaultParams}: Simu
   if (params.dt > maxStableDt(params)) throw new Error('The time step is above the stability limit of the model.');
   const grid: Grid = createGrid(n, seed, preset);
   let steps = 0;
+  // The other grid arrays are scratch that each step rewrites before it reads.
+  const persistent = (): Float32Array[] => [grid.b, grid.d, grid.s, grid.fl, grid.fr, grid.ft, grid.fb, grid.vx, grid.vy];
   return {
     n,
     get steps() {
@@ -40,6 +52,15 @@ export function createSimulation({n, seed, preset, params = defaultParams}: Simu
     },
     snapshot() {
       return {steps, height: grid.b.slice(), water: grid.d.slice(), sediment: grid.s.slice()};
+    },
+    save() {
+      return {steps, fields: persistent().map((f) => f.slice()), rained: grid.rained, evaporated: grid.evaporated};
+    },
+    restore(checkpoint) {
+      persistent().forEach((f, i) => f.set(checkpoint.fields[i]!));
+      grid.rained = checkpoint.rained;
+      grid.evaporated = checkpoint.evaporated;
+      steps = checkpoint.steps;
     },
   };
 }

@@ -18,7 +18,7 @@ test('frames are acknowledged after the handler runs', () => {
   const f = fake();
   const seen: Response[] = [];
   createSimClient(f.worker, (m) => seen.push(m));
-  const frame = {type: 'frame', steps: 1, height: new Float32Array(1), water: new Float32Array(1), sediment: new Float32Array(1)} as const;
+  const frame = {type: 'frame', steps: 1, reached: 1, height: new Float32Array(1), water: new Float32Array(1), sediment: new Float32Array(1)} as const;
   f.worker.onmessage!({data: frame});
   expect(seen).toEqual([frame]);
   expect(f.sent).toEqual([{type: 'ack'}]);
