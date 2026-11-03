@@ -1,23 +1,28 @@
-import {createSimulation, type Simulation, type Snapshot} from './simulation';
+import type {SimulationOptions, Snapshot} from './simulation';
+import {paramsFor} from './settings';
+import {createTimeline, type Timeline} from './timeline';
 import type {PresetId} from '../terrain/presets';
 
 export type Request =
-  | {type: 'init'; n: number; seed: number; preset: PresetId}
+  | {type: 'init'; n: number; seed: number; preset: PresetId; rain: number; hardness: number}
   | {type: 'play'}
   | {type: 'pause'}
+  /** Pauses and jumps to a step, replaying from a checkpoint when it is behind the run. */
+  | {type: 'seek'; step: number}
   /** The page has drawn the last frame; the next one may be sent. */
   | {type: 'ack'};
 
 export type Response =
   | {type: 'ready'; n: number}
-  | ({type: 'frame'} & Snapshot)
+  /** `reached` is the furthest step the run has been to, which bounds what can be scrubbed to. */
+  | ({type: 'frame'; reached: number} & Snapshot)
   | {type: 'error'; message: string};
 
 export interface RunnerEnv {
   post(message: Response, transfer: ArrayBuffer[]): void;
   /** Yields to the event loop so a pause or init message can arrive between batches. */
   schedule(fn: () => void): void;
-  create?: typeof createSimulation;
+  create?: (options: SimulationOptions) => Timeline;
 }
 
 /**
@@ -26,8 +31,8 @@ export interface RunnerEnv {
  * so a slow renderer drops frames instead of queueing them.
  */
 export function createRunner(env: RunnerEnv, stepsPerBatch = 4): (message: Request) => void {
-  const create = env.create ?? createSimulation;
-  let sim: Simulation | null = null;
+  const create = env.create ?? createTimeline;
+  let sim: Timeline | null = null;
   let playing = false;
   let looping = false;
   let awaitingAck = false;
@@ -36,7 +41,7 @@ export function createRunner(env: RunnerEnv, stepsPerBatch = 4): (message: Reque
     if (!sim) return;
     const frame = sim.snapshot();
     awaitingAck = true;
-    env.post({type: 'frame', ...frame}, [frame.height.buffer, frame.water.buffer, frame.sediment.buffer] as ArrayBuffer[]);
+    env.post({type: 'frame', reached: sim.reached, ...frame}, [frame.height.buffer, frame.water.buffer, frame.sediment.buffer] as ArrayBuffer[]);
   }
 
   function tick(): void {
@@ -59,7 +64,7 @@ export function createRunner(env: RunnerEnv, stepsPerBatch = 4): (message: Reque
       switch (message.type) {
         case 'init':
           playing = false;
-          sim = create({n: message.n, seed: message.seed, preset: message.preset});
+          sim = create({n: message.n, seed: message.seed, preset: message.preset, params: paramsFor(message)});
           awaitingAck = false;
           env.post({type: 'ready', n: message.n}, []);
           postFrame();
@@ -74,6 +79,12 @@ export function createRunner(env: RunnerEnv, stepsPerBatch = 4): (message: Reque
           break;
         case 'pause':
           playing = false;
+          break;
+        case 'seek':
+          if (!sim) throw new Error('The simulation has not been initialised.');
+          playing = false;
+          sim.seek(message.step);
+          postFrame();
           break;
         case 'ack':
           awaitingAck = false;

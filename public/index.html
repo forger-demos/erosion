@@ -19,6 +19,7 @@ figure{margin:0}figcaption{color:var(--muted);font-size:.875rem}
 #surface{touch-action:none;cursor:grab;image-rendering:auto}#surface:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 button{font:inherit;padding:.4rem .9rem;color:var(--fg);background:transparent;border:1px solid var(--muted);border-radius:.25rem;cursor:pointer}button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .run{display:flex;gap:.75rem;align-items:center}output{color:var(--muted);font-variant-numeric:tabular-nums}
+input[type=range]{padding:0;accent-color:var(--accent)}.time{display:flex;gap:.75rem;align-items:center;margin-bottom:.5rem}.time input{flex:1}
 #status{color:var(--muted)}
 </style>
 </head>
@@ -30,8 +31,11 @@ button{font:inherit;padding:.4rem .9rem;color:var(--fg);background:transparent;b
 <label>Preset<select id="preset"></select></label>
 <label>View<select id="view"><option value="2d">2D relief</option><option value="3d">3D surface</option></select></label>
 <div class="run"><button id="play" type="button">Play</button><button id="retry" type="button" hidden>Retry</button><output id="steps" aria-live="off">Step 0</output></div>
+<label>Rain <output id="rain-out"></output><input id="rain" type="range"></label>
+<label>Rock hardness <output id="hardness-out"></output><input id="hardness" type="range"></label>
 <label><span><input id="contours" type="checkbox" checked> Contour lines</span></label>
 </form>
+<div class="time"><label for="time">Time</label><input id="time" type="range" min="0" max="0" step="1" value="0" disabled aria-describedby="steps"></div>
 <p id="status" role="status">Generating terrain...</p>
 <canvas id="main" width="256" height="256" role="img" aria-label="Shaded relief map of the selected preset, coloured by height and slope"></canvas>
 <canvas id="surface" hidden tabindex="0" role="img" aria-label="Lit 3D terrain surface. Drag or use the arrow keys to orbit, scroll or use plus and minus to zoom."></canvas>
