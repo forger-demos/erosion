@@ -15,6 +15,10 @@ How is the result shown: a surface you can orbit, a map with contours, water, an
 
 One colour function and one hillshade function in `core`, used by both views. The 2D relief is the first thing built, since it needs no GPU and gives a screenshot immediately; the 3D surface follows. Water and wetness are overlays driven by simulation output. Light and dark page chrome around the view use the existing design tokens.
 
+## As built
+
+The 3D view draws a grid mesh with no vertex attributes: positions come from `gl_VertexID` and a single-channel float height texture read with `texelFetch`, so no filtering extension is needed. The fragment shader takes the Horn gradient from the texture, uses the same sun as the 2D hillshade, and adds distance haze. Its colour function is generated from the palette by `core/relief/glsl.ts`, and a test runs that text next to the TypeScript `groundColour` on a grid of inputs. Camera and matrix maths are pure functions in `core/camera/`; the shell only forwards pointer, wheel, pinch and key events to them. When WebGL2 cannot start, the page says so and keeps the 2D relief.
+
 ## Sources
 
 - Horn, "Hill Shading and the Reflectance Map", Proceedings of the IEEE 1981 (the standard slope/aspect hillshade formulation; cited, not read for this note).
