@@ -2,8 +2,10 @@ import {viewProjection, eyePosition, orbitTarget, type OrbitState} from '../core
 import {fogColour, fragmentShader, vertexShader} from './shaders';
 
 export interface Surface {
-  /** Replaces the terrain shown. */
+  /** Replaces the surface shown: the bed, with lakes drawn flat at their water level. */
   setHeights(heights: Float32Array): void;
+  /** Replaces the water layer: per cell, wetness then water opacity. Absent means dry. */
+  setWater(wetness: Float32Array, alpha: Float32Array): void;
   draw(state: OrbitState): void;
 }
 
@@ -57,6 +59,17 @@ export function createSurface(canvas: HTMLCanvasElement, n: number): SurfaceResu
     gl.texStorage2D(gl.TEXTURE_2D, 1, gl.R32F, n, n);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    const waterTexture = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, waterTexture);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RG32F, n, n);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.useProgram(program);
+    gl.uniform1i(gl.getUniformLocation(program, 'uHeights'), 0);
+    gl.uniform1i(gl.getUniformLocation(program, 'uWater'), 1);
+    const pair = new Float32Array(n * n * 2);
     const viewProjectionLoc = gl.getUniformLocation(program, 'uViewProjection');
     const eyeLoc = gl.getUniformLocation(program, 'uEye');
     const context = gl;
@@ -66,6 +79,16 @@ export function createSurface(canvas: HTMLCanvasElement, n: number): SurfaceResu
         setHeights(heights) {
           context.bindTexture(context.TEXTURE_2D, texture);
           context.texSubImage2D(context.TEXTURE_2D, 0, 0, 0, n, n, context.RED, context.FLOAT, heights);
+        },
+        setWater(wetness, alpha) {
+          for (let i = 0; i < n * n; i++) {
+            pair[i * 2] = wetness[i]!;
+            pair[i * 2 + 1] = alpha[i]!;
+          }
+          context.activeTexture(context.TEXTURE1);
+          context.bindTexture(context.TEXTURE_2D, waterTexture);
+          context.texSubImage2D(context.TEXTURE_2D, 0, 0, 0, n, n, context.RG, context.FLOAT, pair);
+          context.activeTexture(context.TEXTURE0);
         },
         draw(state) {
           const w = canvas.clientWidth * (globalThis.devicePixelRatio || 1);
@@ -81,6 +104,9 @@ export function createSurface(canvas: HTMLCanvasElement, n: number): SurfaceResu
           context.useProgram(program);
           context.bindVertexArray(vao);
           context.bindTexture(context.TEXTURE_2D, texture);
+          context.activeTexture(context.TEXTURE1);
+          context.bindTexture(context.TEXTURE_2D, waterTexture);
+          context.activeTexture(context.TEXTURE0);
           context.uniformMatrix4fv(viewProjectionLoc, false, viewProjection(state, canvas.width / canvas.height, n));
           context.uniform3fv(eyeLoc, eyePosition(state, orbitTarget(n)));
           context.drawElements(context.TRIANGLES, indices.length, context.UNSIGNED_INT, 0);

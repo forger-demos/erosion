@@ -31,7 +31,7 @@ void main() {
 `;
 }
 
-/** Lighting mirrors core/relief: Horn gradient, the same sun, ambient plus gain times shade, then distance haze. */
+/** Wetness and water opacity come from core/water as a two-channel texture. Lighting mirrors core/relief: Horn gradient, the same sun, ambient plus gain times shade, then distance haze. */
 export function fragmentShader(n: number): string {
   const {min, max} = heightRange(n);
   const sun = sunDirection;
@@ -40,6 +40,7 @@ export function fragmentShader(n: number): string {
 precision highp float;
 precision highp int;
 uniform highp sampler2D uHeights;
+uniform highp sampler2D uWater;
 uniform vec3 uEye;
 in vec2 vCell;
 in vec3 vWorld;
@@ -57,7 +58,9 @@ void main() {
   float dx = (c + 2.0 * e + i - (a + 2.0 * d + g)) / 8.0;
   float dy = (g + 2.0 * h + i - (a + 2.0 * b + c)) / 8.0;
   float shade = max(0.0, (-dx * ${f(sun[0])} - dy * ${f(sun[1])} + ${f(sun[2])}) / sqrt(dx * dx + dy * dy + 1.0));
-  vec3 ground = groundColour((vWorld.y - ${f(min)}) / ${f(max - min)}, sqrt(dx * dx + dy * dy), 0.0);
+  vec2 water = texelFetch(uWater, ivec2(x, y), 0).rg;
+  vec3 ground = groundColour((vWorld.y - ${f(min)}) / ${f(max - min)}, sqrt(dx * dx + dy * dy), water.x);
+  ground = mix(ground, vec3(${p.water.map(f).join(', ')}), water.y);
   float light = ${f(p.ambient)} + ${f(p.gain)} * shade;
   float fog = 1.0 - exp(-length(vWorld - uEye) * ${f(1.6 / (n * 3))});
   outColour = vec4(mix(ground * light, vec3(${fogColour.map(f).join(', ')}), fog), 1.0);

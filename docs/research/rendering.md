@@ -24,3 +24,7 @@ The 3D view draws a grid mesh with no vertex attributes: positions come from `gl
 - Horn, "Hill Shading and the Reflectance Map", Proceedings of the IEEE 1981 (the standard slope/aspect hillshade formulation; cited, not read for this note).
 - Jako, Toth, CESCG 2011, section on visualisation of the simulated fields: <https://www.old.cescg.org/CESCG-2011/papers/TUBudapest-Jako-Balazs.pdf>
 - WebGL 2.0 specification, texture sampling in the vertex shader: <https://registry.khronos.org/webgl/specs/latest/2.0/>
+
+## As built
+
+`core/water` turns bed height and water depth into one overlay: lakes are connected groups of still, deep water drawn flat at their mean water level; rivers are cells on the water surface with a large steepest-descent catchment; wetness is the larger of the two plus loose water, spilling onto neighbouring banks. The 2D relief lays the water colour over the ground by the overlay's opacity, and the 3D shader reads the same wetness and opacity from a texture, with lakes already flat in the height texture.

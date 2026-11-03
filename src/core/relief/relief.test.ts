@@ -115,7 +115,22 @@ describe('renderRelief', () => {
     const n = 8;
     const h = ramp(n, () => 20);
     const dry = renderRelief(h, n, {contours: false});
-    const wet = renderRelief(h, n, {contours: false, wetness: new Float32Array(n * n).fill(1)});
+    const full = new Float32Array(n * n).fill(1);
+    const none = new Float32Array(n * n);
+    const water = {surface: h, lake: new Uint8Array(n * n), river: none, wetness: full, alpha: none};
+    const wet = renderRelief(h, n, {contours: false, water});
     expect(wet[0]!).toBeLessThan(dry[0]!);
+  });
+  test('open water is laid over the ground and lit from the drawn surface', () => {
+    const n = 8;
+    const bed = ramp(n, (x) => 20 + x);
+    const flat = ramp(n, () => 24);
+    const none = new Float32Array(n * n);
+    const alpha = new Float32Array(n * n).fill(1);
+    const water = {surface: flat, lake: new Uint8Array(n * n).fill(1), river: none, wetness: alpha, alpha};
+    const out = renderRelief(bed, n, {contours: false, water});
+    const first = Array.from(out.slice(0, 4));
+    for (let i = 0; i < n * n; i++) expect(Array.from(out.slice(i * 4, i * 4 + 4))).toEqual(first);
+    expect(first[2]!).toBeGreaterThan(first[0]!);
   });
 });
