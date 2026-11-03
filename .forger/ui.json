@@ -12,7 +12,8 @@
   "start": "bun run start",
   "url": "http://localhost:3102",
   "routes": [
-    "/"
+    "/",
+    "/?view=3d"
   ],
   "viewports": [
     {
