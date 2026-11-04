@@ -33,7 +33,21 @@ describe('terrain from a seed', () => {
 
   test('pinned hashes catch maths or engine drift', () => {
     const pinned = Object.fromEntries(presetIds.map((id) => [id, hashHeights(generateTerrain(32, 7, id))]));
-    expect(pinned).toEqual({alpine: '50747a44', hills: '1903db4a', canyon: 'd83e450d'});
+    expect(pinned).toEqual({alpine: '50747a44', hills: '1903db4a', canyon: '793bf05f'});
+  });
+
+  test('the warped canyon has no repeated neighbouring cells along its edges', () => {
+    const n = 128;
+    for (const seed of [1, 2, 3, 7]) {
+      const h = generateTerrain(n, seed, 'canyon');
+      let repeats = 0;
+      for (let i = 1; i < n; i++) {
+        for (const [a, b] of [[i, i - 1], [(n - 1) * n + i, (n - 1) * n + i - 1], [i * n, (i - 1) * n], [i * n + n - 1, (i - 1) * n + n - 1]] as const) {
+          if (h[a] === h[b]) repeats++;
+        }
+      }
+      expect(repeats).toBe(0);
+    }
   });
 
   test('the ridged range of a preset is not flat', () => {

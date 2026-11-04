@@ -1,6 +1,6 @@
 import {describe, expect, test} from 'bun:test';
 import {gridIndices, createSurface} from './surface';
-import {fragmentShader, vertexShader} from './shaders';
+import {fragmentShader, skyColours, vertexShader} from './shaders';
 
 describe('createSurface', () => {
   test('reports WebGL2 as unavailable when the canvas gives no context', () => {
@@ -40,6 +40,7 @@ describe('shader sources', () => {
     expect(f).toContain('vec3 groundColour(');
     expect(f).toContain('clamp(x, 0, 63)');
     expect(f).toContain('texelFetch(uWater');
+    expect(f).toContain('uniform vec3 uSky;');
   });
 });
 
@@ -77,6 +78,16 @@ describe('createSurface with a context', () => {
     expect(calls).toContain('drawElements');
     expect(canvas.width).toBe(300 * (globalThis.devicePixelRatio || 1));
     expect(canvas.height).toBe(200 * (globalThis.devicePixelRatio || 1));
+  });
+  test('clears to the sky colour of the theme it was given', () => {
+    const clears: unknown[][] = [];
+    const gl = fakeGl([]) as Record<string, unknown>;
+    const spy = new Proxy(gl, {get: (t, k: string) => (k === 'clearColor' ? (...a: unknown[]) => clears.push(a) : (t as Record<string, unknown>)[k])});
+    const r = createSurface(fakeCanvas(spy), 4);
+    if (!r.ok) throw new Error(r.reason);
+    r.surface.setTheme('dark');
+    r.surface.draw({yaw: 0, pitch: 0.5, distance: 100});
+    expect(clears[0]).toEqual([...skyColours.dark, 1]);
   });
   test('reports a link failure instead of throwing', () => {
     const gl = new Proxy({}, {get: (_t, k: string) => (k === 'getProgramParameter' ? () => false : k === 'getShaderParameter' ? () => true : k === 'getProgramInfoLog' ? () => 'link bad' : () => 1)});

@@ -26,6 +26,12 @@ The worker owns both paths. On `init` it asks `detectGpu` for a WebGL2 context o
 
 Four passes per step on RGBA32F textures: outflow flux with rain, then depth, velocity and erosion, then sediment transport, then evaporation and thermal weathering. The CPU scatters sediment and thermal material to neighbours; the passes gather the same amounts instead, so only the order of float additions differs. The CPU erosion stage reads the bed as the stage began, the same as the passes do. Measure speed with `bun run bench` for the CPU and by watching the step counter on the page for the GPU.
 
+## Browser notes
+
+- Current Chrome and Firefox load the page, run the worker and draw the relief. The 3D view and the GPU path need WebGL2 with float render targets; where either is missing the page says so and keeps the CPU reference and the 2D relief.
+- Safari has not been exercised against this page. It supports WebGL2 and module workers, but `OffscreenCanvas` WebGL inside a worker and `EXT_color_buffer_float` are the pieces to check first; a failure there lands on the CPU fallback with the reason shown.
+- The 2D relief resamples the height field bilinearly before shading and tracing contours, so lines are smooth at display size; the canvas is then scaled with the browser's bilinear filter. This costs a fraction of a second of main-thread time per drawn frame on the larger grid.
+
 ## Sources
 
 - Browser support for WebGPU: <https://caniuse.com/webgpu>

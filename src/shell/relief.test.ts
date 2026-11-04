@@ -18,7 +18,7 @@ describe('drawRelief', () => {
     const canvas = {getContext: () => ctx} as unknown as HTMLCanvasElement;
     expect(drawRelief(canvas, 1, 'alpine', false)).toBe(true);
     expect(put).toBe(1);
-    expect(image!.data.length).toBe(gridSize * gridSize * 4);
+    expect(image!.data.length).toBe(gridSize * gridSize * 9 * 4);
     expect(image!.data[3]).toBe(255);
     const d = image!.data;
     let coloured = false;
@@ -34,7 +34,7 @@ describe('drawRelief', () => {
     };
     const canvas = {getContext: () => ctx, width: 0, height: 0} as unknown as HTMLCanvasElement;
     drawReliefHeights(canvas, new Float32Array(40 * 40), false);
-    expect(sizes).toEqual([40, 40]);
-    expect([canvas.width, canvas.height]).toEqual([40, 40]);
+    expect(sizes).toEqual([120, 120]);
+    expect([canvas.width, canvas.height]).toEqual([120, 120]);
   });
 });

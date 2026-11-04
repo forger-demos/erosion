@@ -3,8 +3,13 @@ import {reliefPalette} from '../core/relief/palette';
 import {groundColourGlsl} from '../core/relief/glsl';
 import {heightRange} from '../core/terrain/noise';
 
-/** Colour of the distance haze; the canvas is cleared to the same colour. */
-export const fogColour: readonly [number, number, number] = [0.66, 0.74, 0.84];
+export type Theme = 'light' | 'dark';
+
+/** Colour of the distance haze and of the cleared canvas: the page background of each theme, so the surface fades into the page. */
+export const skyColours: Record<Theme, readonly [number, number, number]> = {
+  light: [0.969, 0.973, 0.984],
+  dark: [0.043, 0.051, 0.071],
+};
 
 function f(v: number): string {
   const s = String(v);
@@ -42,6 +47,7 @@ precision highp int;
 uniform highp sampler2D uHeights;
 uniform highp sampler2D uWater;
 uniform vec3 uEye;
+uniform vec3 uSky;
 in vec2 vCell;
 in vec3 vWorld;
 out vec4 outColour;
@@ -62,8 +68,8 @@ void main() {
   vec3 ground = groundColour((vWorld.y - ${f(min)}) / ${f(max - min)}, sqrt(dx * dx + dy * dy), water.x);
   ground = mix(ground, vec3(${p.water.map(f).join(', ')}), water.y);
   float light = ${f(p.ambient)} + ${f(p.gain)} * shade;
-  float fog = 1.0 - exp(-length(vWorld - uEye) * ${f(1.6 / (n * 3))});
-  outColour = vec4(mix(ground * light, vec3(${fogColour.map(f).join(', ')}), fog), 1.0);
+  float fog = 1.0 - exp(-length(vWorld - uEye) * ${f(0.4 / (n * 3))});
+  outColour = vec4(mix(ground * light, uSky, fog), 1.0);
 }
 `;
 }
